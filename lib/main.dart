@@ -18,10 +18,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const AppLayout(
-        title: 'Maju Bakery & Cafe',
-        child: DashboardContent(),
-      ),
+      home: const AppLayout(title: 'Dashboard', child: DashboardContent()),
     );
   }
 }
