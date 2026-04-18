@@ -4,8 +4,7 @@ class AppLayout extends StatelessWidget {
   final Widget child;
   final String title;
 
-  const AppLayout({Key? key, required this.child, this.title = 'FinSight'})
-    : super(key: key);
+  const AppLayout({super.key, required this.child, this.title = 'FinSight'});
 
   Widget _navTile(BuildContext context, IconData icon, String label) {
     return ListTile(
@@ -113,6 +112,7 @@ class AppLayout extends StatelessWidget {
         final bool narrow = constraints.maxWidth < 800;
         if (narrow) {
           return Scaffold(
+            backgroundColor: Colors.white,
             appBar: AppBar(title: Text(title)),
             drawer: Drawer(child: _buildSidebar(context)),
             body: child,
@@ -120,6 +120,7 @@ class AppLayout extends StatelessWidget {
         }
 
         return Scaffold(
+          backgroundColor: Colors.white,
           body: Row(
             children: [
               SizedBox(width: 260, child: _buildSidebar(context)),
