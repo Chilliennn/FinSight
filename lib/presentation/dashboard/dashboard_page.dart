@@ -229,6 +229,10 @@ class DashboardContent extends StatelessWidget {
                 ],
               );
 
+        final topCardHeight = 500.0;
+        final sideCardWidth = 332.0;
+        final bottomCardHeight = 420.0;
+
         return SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             horizontalPadding,
@@ -349,14 +353,14 @@ class DashboardContent extends StatelessWidget {
                     Expanded(
                       flex: 2,
                       child: SizedBox(
-                        height: 430,
+                        height: topCardHeight,
                         child: _TrendCard(cardShell: _cardShell),
                       ),
                     ),
                     const SizedBox(width: 14),
                     SizedBox(
-                      width: 332,
-                      height: 430,
+                      width: sideCardWidth,
+                      height: topCardHeight,
                       child: _RiskCard(
                         cardShell: _cardShell,
                         riskTile: _riskTile,
@@ -370,11 +374,15 @@ class DashboardContent extends StatelessWidget {
                   children: [
                     Expanded(
                       flex: 2,
-                      child: _RecommendationsCard(cardShell: _cardShell),
+                      child: SizedBox(
+                        height: bottomCardHeight,
+                        child: _RecommendationsCard(cardShell: _cardShell),
+                      ),
                     ),
                     const SizedBox(width: 14),
                     SizedBox(
-                      width: 332,
+                      width: sideCardWidth,
+                      height: bottomCardHeight,
                       child: _TransactionsCard(cardShell: _cardShell),
                     ),
                   ],
@@ -556,75 +564,93 @@ class _RecommendationsCard extends StatelessWidget {
     return cardShell(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionRow(
-              'AI Recommendations',
-              'Top 3 actions by impact',
-              actionText: 'View all 5',
-            ),
-            const SizedBox(height: 12),
-            const _RecommendationRow(
-              index: 1,
-              title: 'Collect Overdue Invoice from TechCorp (INV-2026-089)',
-              subtitle: 'Within 7 days • easy',
-              amount: '+RM 8,500',
-              amountHint: 'cash in',
-              amountColor: Color(0xFF16A34A),
-              accent: Color(0xFF2563EB),
-            ),
-            const SizedBox(height: 10),
-            const _RecommendationRow(
-              index: 2,
-              title: 'Negotiate 14-Day Extension with Sunrise Ingredients',
-              subtitle: 'Within 2 weeks • easy',
-              amount: '+RM 12,000',
-              amountHint: 'buffer',
-              amountColor: Color(0xFFF97316),
-              accent: Color(0xFF2563EB),
-            ),
-            const SizedBox(height: 10),
-            const _RecommendationRow(
-              index: 3,
-              title: 'Follow Up on Axiata Invoice (INV-2026-112)',
-              subtitle: 'Within 10 days • easy',
-              amount: '+RM 5,500',
-              amountHint: 'cash in',
-              amountColor: Color(0xFF16A34A),
-              accent: Color(0xFF2563EB),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFA7F3D0)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.lightbulb_outline,
-                    color: Color(0xFF16A34A),
-                    size: 18,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Build the column content
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionRow(
+                  'AI Recommendations',
+                  'Top 3 actions by impact',
+                  actionText: 'View all 5',
+                ),
+                const SizedBox(height: 12),
+                const _RecommendationRow(
+                  index: 1,
+                  title: 'Collect Overdue Invoice from TechCorp (INV-2026-089)',
+                  subtitle: 'Within 7 days • easy',
+                  amount: '+RM 8,500',
+                  amountHint: 'cash in',
+                  amountColor: Color(0xFF16A34A),
+                  accent: Color(0xFF2563EB),
+                ),
+                const SizedBox(height: 10),
+                const _RecommendationRow(
+                  index: 2,
+                  title: 'Negotiate 14-Day Extension with Sunrise Ingredients',
+                  subtitle: 'Within 2 weeks • easy',
+                  amount: '+RM 12,000',
+                  amountHint: 'buffer',
+                  amountColor: Color(0xFFF97316),
+                  accent: Color(0xFF2563EB),
+                ),
+                const SizedBox(height: 10),
+                const _RecommendationRow(
+                  index: 3,
+                  title: 'Follow Up on Axiata Invoice (INV-2026-112)',
+                  subtitle: 'Within 10 days • easy',
+                  amount: '+RM 5,500',
+                  amountHint: 'cash in',
+                  amountColor: Color(0xFF16A34A),
+                  accent: Color(0xFF2563EB),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
                   ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Following top 3 recommendations prevents the cash gap and adds +RM 24,000 to your buffer.',
-                      style: TextStyle(
-                        color: Color(0xFF166534),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.lightbulb_outline,
+                        color: Color(0xFF16A34A),
+                        size: 18,
                       ),
-                    ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Following top 3 recommendations prevents the cash gap and adds +RM 24,000 to your buffer.',
+                          style: TextStyle(
+                            color: Color(0xFF166534),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+
+            if (constraints.maxHeight.isFinite) {
+              // When the card is given a fixed height (desktop layout), allow vertical scrolling
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: content,
+                ),
+              );
+            }
+
+            // In unconstrained layouts (mobile/stacked), render normally
+            return content;
+          },
         ),
       ),
     );
@@ -641,82 +667,79 @@ class _TransactionsCard extends StatelessWidget {
     return cardShell(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionRow(
-              'Recent Transactions',
-              '42 total extracted',
-              actionText: 'All',
-            ),
-            const SizedBox(height: 12),
-            const _TransactionRow(
-              title: 'Malayan Banking Berhad',
-              date: '2026-04-16',
-              amount: '+RM 4,200',
-              amountColor: Color(0xFF16A34A),
-              icon: Icons.trending_up_rounded,
-              iconColor: Color(0xFF34D399),
-            ),
-            const _TransactionRow(
-              title: 'Meta Business',
-              date: '2026-04-15',
-              amount: '-RM 1,200',
-              amountColor: Color(0xFFEF4444),
-              icon: Icons.trending_down_rounded,
-              iconColor: Color(0xFFF87171),
-            ),
-            const _TransactionRow(
-              title: 'Fresh Farm Sdn Bhd',
-              date: '2026-04-14',
-              amount: '-RM 1,100',
-              amountColor: Color(0xFFEF4444),
-              icon: Icons.trending_down_rounded,
-              iconColor: Color(0xFFF87171),
-            ),
-            const _TransactionRow(
-              title: 'Maju Bakery Counter',
-              date: '2026-04-12',
-              amount: '+RM 8,800',
-              amountColor: Color(0xFF16A34A),
-              icon: Icons.trending_up_rounded,
-              iconColor: Color(0xFF34D399),
-            ),
-            const _TransactionRow(
-              title: 'Maxis Berhad',
-              date: '2026-04-10',
-              amount: '-RM 280',
-              amountColor: Color(0xFFEF4444),
-              icon: Icons.trending_down_rounded,
-              iconColor: Color(0xFFF87171),
-            ),
-            const _TransactionRow(
-              title: 'Tenaga Nasional Berhad',
-              date: '2026-04-08',
-              amount: '-RM 1,320',
-              amountColor: Color(0xFFEF4444),
-              icon: Icons.trending_down_rounded,
-              iconColor: Color(0xFFF87171),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Text(
-                '2 pending uploads waiting for OCR parsing',
-                style: TextStyle(
-                  color: Color(0xFF334155),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionRow(
+                  'Recent Transactions',
+                  '42 total extracted',
+                  actionText: 'All',
                 ),
-              ),
-            ),
-          ],
+                const SizedBox(height: 12),
+                const _TransactionRow(
+                  title: 'Malayan Banking Berhad',
+                  date: '2026-04-16',
+                  amount: '+RM 4,200',
+                  amountColor: Color(0xFF16A34A),
+                  icon: Icons.trending_up_rounded,
+                  iconColor: Color(0xFF34D399),
+                ),
+                const _TransactionRow(
+                  title: 'Meta Business',
+                  date: '2026-04-15',
+                  amount: '-RM 1,200',
+                  amountColor: Color(0xFFEF4444),
+                  icon: Icons.trending_down_rounded,
+                  iconColor: Color(0xFFF87171),
+                ),
+                const _TransactionRow(
+                  title: 'Fresh Farm Sdn Bhd',
+                  date: '2026-04-14',
+                  amount: '-RM 1,100',
+                  amountColor: Color(0xFFEF4444),
+                  icon: Icons.trending_down_rounded,
+                  iconColor: Color(0xFFF87171),
+                ),
+                const _TransactionRow(
+                  title: 'Maju Bakery Counter',
+                  date: '2026-04-12',
+                  amount: '+RM 8,800',
+                  amountColor: Color(0xFF16A34A),
+                  icon: Icons.trending_up_rounded,
+                  iconColor: Color(0xFF34D399),
+                ),
+                const _TransactionRow(
+                  title: 'Maxis Berhad',
+                  date: '2026-04-10',
+                  amount: '-RM 280',
+                  amountColor: Color(0xFFEF4444),
+                  icon: Icons.trending_down_rounded,
+                  iconColor: Color(0xFFF87171),
+                ),
+                const _TransactionRow(
+                  title: 'Tenaga Nasional Berhad',
+                  date: '2026-04-08',
+                  amount: '-RM 1,320',
+                  amountColor: Color(0xFFEF4444),
+                  icon: Icons.trending_down_rounded,
+                  iconColor: Color(0xFFF87171),
+                ),
+              ],
+            );
+
+            if (constraints.maxHeight.isFinite) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: content,
+                ),
+              );
+            }
+
+            return content;
+          },
         ),
       ),
     );
