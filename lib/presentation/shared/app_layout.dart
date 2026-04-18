@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../risks/risks_page.dart'; //zh
 
 class AppLayout extends StatelessWidget {
   final Widget child;
@@ -17,6 +18,31 @@ class AppLayout extends StatelessWidget {
       },
     );
   }
+
+  // zh
+  Widget _riskAlertsNavTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.warning_amber_outlined, color: Colors.white70),
+      title: const Text('Risk Alerts', style: TextStyle(color: Colors.white70)),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AppLayout(
+              title: 'Risk Alerts',
+              child: RisksPage(
+                businessId: 'maju-bakery-demo',
+                // DEMO MODE — works without backend.
+                // When backend is ready, swap to:
+                //   api: RisksApi.http(baseUrl: 'http://localhost:3000'),
+                api: RisksApi.demo(),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+  // End zh addition
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
@@ -51,11 +77,7 @@ class AppLayout extends StatelessWidget {
                   _navTile(context, Icons.upload_file, 'Upload Documents'),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
                   _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
-                  _navTile(
-                    context,
-                    Icons.warning_amber_outlined,
-                    'Risk Alerts',
-                  ),
+                  _riskAlertsNavTile(context), // zh
                   _navTile(context, Icons.lightbulb, 'Recommendations'),
                 ],
               ),
