@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -1257,6 +1258,155 @@ class _RiskCardState extends State<_RiskCard> {
               color: Color(0xFF475569),
               fontSize: 11,
               fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/* ====================================================================== *
+ *          SIDEBAR BADGE — for app_layout.dart to embed                  *
+ *                                                                        *
+ *   Shows:  "X Active Risks" + "Last updated: dd MMM yyyy"               *
+ *   Source: Real backend via GET /api/risks/:businessId                  *
+ *   Refresh: polls every 15s so detect results appear automatically      *
+ * ====================================================================== */
+
+class RiskAlertsSidebarBadge extends StatefulWidget {
+  final String businessId;
+  final RisksApi api;
+
+  const RiskAlertsSidebarBadge({
+    super.key,
+    required this.businessId,
+    required this.api,
+  });
+
+  @override
+  State<RiskAlertsSidebarBadge> createState() => _RiskAlertsSidebarBadgeState();
+}
+
+class _RiskAlertsSidebarBadgeState extends State<RiskAlertsSidebarBadge> {
+  RiskDashboardData? _data;
+  bool _loading = true;
+  Object? _error;
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final data = await widget.api.fetch(widget.businessId);
+      if (!mounted) return;
+      setState(() {
+        _data = data;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e;
+      });
+    }
+  }
+
+  String _fmtDate(DateTime d) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Active = critical + high (matches UI's "Active Risks" definition)
+    final activeCount = _data == null
+        ? 0
+        : _data!.counts.critical + _data!.counts.high;
+
+    final lastUpdated = _data?.lastUpdated;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0x33F59E0B), // faint amber bg
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0x66F59E0B)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFFF59E0B),
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_loading)
+                  const Text(
+                    'Loading risks…',
+                    style: TextStyle(
+                      color: Color(0xFFF59E0B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                else if (_error != null)
+                  const Text(
+                    'Risks unavailable',
+                    style: TextStyle(
+                      color: Color(0xFFF59E0B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                else
+                  Text(
+                    '$activeCount Active Risk${activeCount == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: Color(0xFFF59E0B),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                const SizedBox(height: 2),
+                Text(
+                  lastUpdated != null
+                      ? 'Last updated: ${_fmtDate(lastUpdated)}'
+                      : 'Never detected',
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                ),
+              ],
             ),
           ),
         ],

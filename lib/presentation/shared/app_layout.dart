@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../risks/risks_page.dart'; //zh
+import '../risks/risks_page.dart'; // ← added by zh for Risk Alerts navigation
 
 class AppLayout extends StatelessWidget {
   final Widget child;
@@ -19,7 +19,8 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // zh
+  // ↓↓↓ Added by zh — dedicated nav tile that navigates to Risks page.
+  // Kept as a separate function so teammates' _navTile stays untouched.
   Widget _riskAlertsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.warning_amber_outlined, color: Colors.white70),
@@ -31,10 +32,8 @@ class AppLayout extends StatelessWidget {
               title: 'Risk Alerts',
               child: RisksPage(
                 businessId: 'maju-bakery-demo',
-                // DEMO MODE — works without backend.
-                // When backend is ready, swap to:
-                //   api: RisksApi.http(baseUrl: 'http://localhost:3000'),
-                api: RisksApi.demo(),
+                // Real backend. Requires `node lib/app.js` running on port 3000.
+                api: RisksApi.http(baseUrl: 'http://localhost:3000'),
               ),
             ),
           ),
@@ -42,7 +41,7 @@ class AppLayout extends StatelessWidget {
       },
     );
   }
-  // End zh addition
+  // ↑↑↑ End zh addition
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
@@ -77,25 +76,21 @@ class AppLayout extends StatelessWidget {
                   _navTile(context, Icons.upload_file, 'Upload Documents'),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
                   _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
-                  _riskAlertsNavTile(context), // zh
+                  _riskAlertsNavTile(context), // ← changed by zh (was _navTile)
                   _navTile(context, Icons.lightbulb, 'Recommendations'),
                 ],
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(12.0),
-              child: Row(
-                children: const [
-                  Icon(Icons.info_outline, color: Colors.white54),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Demo Mode',
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                  ),
-                ],
+              // ↓↓↓ Changed by zh — was a static "Demo Mode" label.
+              // Now shows real-time Active Risks count + last update time
+              // from the same /api/risks backend the Risk Alerts page uses.
+              child: RiskAlertsSidebarBadge(
+                businessId: 'maju-bakery-demo',
+                api: RisksApi.http(baseUrl: 'http://localhost:3000'),
               ),
+              // ↑↑↑ End zh change
             ),
           ],
         ),
