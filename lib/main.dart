@@ -1,6 +1,7 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'presentation/shared/app_layout.dart';
-import 'presentation/dashboard/dashboard_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,13 +13,20 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FinSight',
+      title:                      'FinSight AI',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        colorScheme:             ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
+        useMaterial3:            true,
+        scaffoldBackgroundColor: Colors.white,
       ),
-      home: const AppLayout(title: 'Dashboard', child: DashboardContent()),
+      // Dashboard is the root route — built with nav callbacks via buildDashboardWithNav
+      home: Builder(
+        builder: (context) => AppLayout(
+          title: 'Dashboard',
+          child: buildDashboardWithNav(context),
+        ),
+      ),
     );
   }
 }
