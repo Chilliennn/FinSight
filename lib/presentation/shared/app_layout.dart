@@ -10,6 +10,7 @@
 //   4. All other code (zh's tiles, _navTile, _buildTopBar, build) is UNCHANGED.
 
 import 'package:flutter/material.dart';
+import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';         // zh's risk navigation
 import '../actions/recommendation_page.dart';     // xy's recommendations navigation
 import '../dashboard/dashboard_page.dart'; // ← NEW: for dashboard tile + callbacks
@@ -17,8 +18,16 @@ import '../dashboard/dashboard_page.dart'; // ← NEW: for dashboard tile + call
 class AppLayout extends StatelessWidget {
   final Widget child;
   final String title;
+  final String? subtitle;
+  final bool showAiStatus;
 
-  const AppLayout({super.key, required this.child, this.title = 'FinSight'});
+  const AppLayout({
+    super.key,
+    required this.child,
+    this.title = 'FinSight',
+    this.subtitle,
+    this.showAiStatus = false,
+  });
 
   // ── Original _navTile — UNTOUCHED ─────────────────────────────────────────
   Widget _navTile(BuildContext context, IconData icon, String label) {
@@ -42,6 +51,27 @@ class AppLayout extends StatelessWidget {
       onTap: () {
         // Pop back to the first route (Dashboard is always the root).
         Navigator.of(context).popUntil((route) => route.isFirst);
+      },
+    );
+  }
+
+  Widget _uploadNavTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.upload_file, color: Colors.white70),
+      title: const Text(
+        'Upload Documents',
+        style: TextStyle(color: Colors.white70),
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const AppLayout(
+              title: 'Upload Documents',
+              showAiStatus: true,
+              child: UploadPage(),
+            ),
+          ),
+        );
       },
     );
   }
@@ -123,7 +153,7 @@ class AppLayout extends StatelessWidget {
               child: ListView(
                 children: [
                   _dashboardNavTile(context),        // ← NEW (replaces SnackBar _navTile)
-                  _navTile(context, Icons.upload_file,  'Upload Documents'),
+                  _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
                   _navTile(context, Icons.show_chart,   'Cash Flow Forecast'),
                   _riskAlertsNavTile(context),       // zh's tile — unchanged
@@ -146,23 +176,130 @@ class AppLayout extends StatelessWidget {
 
   // ── _buildTopBar — UNTOUCHED ──────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context) {
+    if (subtitle == null && !showAiStatus) {
+      return Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: const BoxDecoration(color: Colors.white),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.notifications_none),
+            const SizedBox(width: 12),
+            CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: const Text('MJ'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: const BoxDecoration(color: Colors.white),
+      height: subtitle == null ? 64 : 102,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+      ),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF020817),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle!,
+                    style: const TextStyle(
+                      color: Color(0xFF74819A),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const Icon(Icons.notifications_none),
-          const SizedBox(width: 12),
-          CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            child: const Text('MJ'),
+          if (showAiStatus) ...[
+            Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFA7F3D0)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, size: 11, color: Color(0xFF6EE7B7)),
+                  SizedBox(width: 12),
+                  Text(
+                    'AI Active',
+                    style: TextStyle(
+                      color: Color(0xFF065F46),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 26),
+          ],
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(
+                Icons.notifications_none,
+                color: Color(0xFF64748B),
+                size: 29,
+              ),
+              if (showAiStatus)
+                Positioned(
+                  right: -1,
+                  top: -4,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 24),
+          const CircleAvatar(
+            radius: 25,
+            backgroundColor: Color(0xFF4F46E5),
+            child: Text(
+              'MJ',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ],
       ),
