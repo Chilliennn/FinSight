@@ -21,8 +21,8 @@
     "related_reference": "INV-2026-089",
     "status": "active",
     "actioned_at": null,
-    "generated_at": { "$date": "2026-04-16T08:00:00.000Z" },
-    "expires_at":   { "$date": "2026-04-23T08:00:00.000Z" }
+    "generated_at": { "$date": "2026-04-21T08:00:00.000Z" },
+    "expires_at":   { "$date": "2026-12-31T23:59:59.000Z" }
   },
   {
     "_id": "seed-rec-002",
@@ -46,8 +46,8 @@
     "related_reference": null,
     "status": "active",
     "actioned_at": null,
-    "generated_at": { "$date": "2026-04-16T08:00:00.000Z" },
-    "expires_at":   { "$date": "2026-04-23T08:00:00.000Z" }
+    "generated_at": { "$date": "2026-04-21T08:00:00.000Z" },
+    "expires_at":   { "$date": "2026-12-31T23:59:59.000Z" }
   },
   {
     "_id": "seed-rec-003",
@@ -70,8 +70,8 @@
     "related_reference": "INV-2026-112",
     "status": "active",
     "actioned_at": null,
-    "generated_at": { "$date": "2026-04-16T08:00:00.000Z" },
-    "expires_at":   { "$date": "2026-04-23T08:00:00.000Z" }
+    "generated_at": { "$date": "2026-04-21T08:00:00.000Z" },
+    "expires_at":   { "$date": "2026-12-31T23:59:59.000Z" }
   },
   {
     "_id": "seed-rec-004",
@@ -94,8 +94,8 @@
     "related_reference": null,
     "status": "active",
     "actioned_at": null,
-    "generated_at": { "$date": "2026-04-16T08:00:00.000Z" },
-    "expires_at":   { "$date": "2026-04-23T08:00:00.000Z" }
+    "generated_at": { "$date": "2026-04-21T08:00:00.000Z" },
+    "expires_at":   { "$date": "2026-12-31T23:59:59.000Z" }
   },
   {
     "_id": "seed-rec-005",
@@ -119,7 +119,7 @@
     "related_reference": null,
     "status": "active",
     "actioned_at": null,
-    "generated_at": { "$date": "2026-04-16T08:00:00.000Z" },
-    "expires_at":   { "$date": "2026-04-23T08:00:00.000Z" }
+    "generated_at": { "$date": "2026-04-21T08:00:00.000Z" },
+    "expires_at":   { "$date": "2026-12-31T23:59:59.000Z" }
   }
 ]
