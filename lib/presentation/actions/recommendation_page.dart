@@ -7,9 +7,6 @@ import 'package:intl/intl.dart';
 import '../../data/models/recommendation_model.dart';
 import '../../data/repositories/recommendation_repository.dart';
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PUBLIC ENTRY POINT
-// ══════════════════════════════════════════════════════════════════════════════
 
 class RecommendationPage extends StatefulWidget {
   final String businessId;
@@ -88,7 +85,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
     return _buildContent();
   }
 
-  // ── Error state ────────────────────────────────────────────────────────────
 
   Widget _buildErrorState() {
     return Center(
@@ -113,7 +109,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
     );
   }
 
-  // ── Main content ───────────────────────────────────────────────────────────
 
   Widget _buildContent() {
     // The highest-priority non-actioned recommendation gets the banner treatment
@@ -125,8 +120,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
     return ListView(
       padding: const EdgeInsets.all(28),
       children: [
-
-        // ── Page header ──────────────────────────────────────────────────────
         Row(children: [
           Expanded(
             child: Column(
@@ -161,7 +154,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
         ]),
         const SizedBox(height: 20),
 
-        // ── Impact summary card ──────────────────────────────────────────────
         if (_summary != null)
           _ImpactSummaryCard(
             summary:         _summary!,
@@ -169,7 +161,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
           ),
         const SizedBox(height: 16),
 
-        // ── Stat chips ───────────────────────────────────────────────────────
+        // Stat chips 
         if (_summary != null)
           Row(children: [
             Expanded(child: _StatChip(
@@ -195,7 +187,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
           ]),
         const SizedBox(height: 20),
 
-        // ── Highest priority banner ──────────────────────────────────────────
+        // Highest priority banner
         if (topRec != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -227,7 +219,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
           const SizedBox(height: 16),
         ],
 
-        // ── Remaining recommendations ────────────────────────────────────────
+        //Remaining recommendations
         ..._recommendations
             .skip(topRec != null ? 1 : 0)
             .map((rec) => Padding(
@@ -239,7 +231,7 @@ class _RecommendationPageState extends State<RecommendationPage> {
               ),
             )),
 
-        // ── AI disclaimer ────────────────────────────────────────────────────
+        //AI disclaimer 
         Container(
           margin:  const EdgeInsets.only(top: 8),
           padding: const EdgeInsets.all(16),
@@ -270,10 +262,6 @@ class _RecommendationPageState extends State<RecommendationPage> {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PRIVATE WIDGET — _ImpactSummaryCard
-// Dark summary card showing total actionable RM impact + per-rec bar chart.
-// ══════════════════════════════════════════════════════════════════════════════
 
 class _ImpactSummaryCard extends StatelessWidget {
   final RecommendationSummary summary;
@@ -319,7 +307,7 @@ class _ImpactSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
 
-          // ── Header row ───────────────────────────────────────────────────
+          // Header row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -478,10 +466,6 @@ class _ImpactSummaryCard extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PRIVATE WIDGET — _StatChip
-// Counter pill for easy / total / can-act-today summary metrics.
-// ══════════════════════════════════════════════════════════════════════════════
 
 class _StatChip extends StatelessWidget {
   final String value;
@@ -527,10 +511,6 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// PRIVATE WIDGET — _RecommendationCard
-// Expandable card showing rank, category, impact, reasoning, and action steps.
-// ══════════════════════════════════════════════════════════════════════════════
 
 class _RecommendationCard extends StatefulWidget {
   final Recommendation recommendation;
@@ -577,7 +557,7 @@ class _RecommendationCardState extends State<_RecommendationCard>
     _expanded ? _animController.forward() : _animController.reverse();
   }
 
-  // ── Colour / icon helpers ─────────────────────────────────────────────────
+  
 
   String _rmFormat(double amount) =>
       '+RM ${NumberFormat('#,###', 'en_MY').format(amount.round())}';
@@ -630,8 +610,7 @@ class _RecommendationCardState extends State<_RecommendationCard>
     }
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
-
+  
   @override
   Widget build(BuildContext context) {
     final rec         = widget.recommendation;
@@ -659,7 +638,7 @@ class _RecommendationCardState extends State<_RecommendationCard>
       ),
       child: Column(children: [
 
-        // ── Card header ───────────────────────────────────────────────────
+        
         Padding(
           padding: const EdgeInsets.all(20),
           child: Row(
@@ -772,7 +751,7 @@ class _RecommendationCardState extends State<_RecommendationCard>
           ),
         ),
 
-        // ── Toggle row (expand / mark actioned) ───────────────────────────
+        
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Row(children: [
@@ -827,7 +806,7 @@ class _RecommendationCardState extends State<_RecommendationCard>
           ]),
         ),
 
-        // ── Expandable details (reasoning + action steps) ─────────────────
+        
         SizeTransition(
           sizeFactor: _expandAnim,
           child: Container(
@@ -930,8 +909,6 @@ class _RecommendationCardState extends State<_RecommendationCard>
       ]),
     );
   }
-
-  // ── Micro widget helpers ───────────────────────────────────────────────────
 
   Widget _buildSectionHeader(IconData icon, String label) {
     return Row(children: [
