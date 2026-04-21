@@ -11,7 +11,7 @@
 
 import 'package:flutter/material.dart';
 import '../risks/risks_page.dart';         // zh's risk navigation
-import '../actions/actions_page.dart';     // xy's recommendations navigation
+import '../actions/recommendation_page.dart';     // xy's recommendations navigation
 import '../dashboard/dashboard_page.dart'; // ← NEW: for dashboard tile + callbacks
 
 class AppLayout extends StatelessWidget {
@@ -80,7 +80,7 @@ class AppLayout extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => const AppLayout(
               title: 'Recommendations',
-              child: ActionsContent(
+              child: RecommendationPage(
                 businessId:   'demo-maju-bakery-001',
                 businessName: 'Maju Bakery & Cafe',
                 riskId:       'demo-risk-cashgap-001',
@@ -215,7 +215,7 @@ Widget buildDashboardWithNav(BuildContext context) {
         MaterialPageRoute(
           builder: (_) => const AppLayout(
             title: 'Recommendations',
-            child: ActionsContent(
+            child: RecommendationPage(
               businessId:   'demo-maju-bakery-001',
               businessName: 'Maju Bakery & Cafe',
               riskId:       'demo-risk-cashgap-001',

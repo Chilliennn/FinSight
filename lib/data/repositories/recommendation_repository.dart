@@ -1,23 +1,12 @@
-// lib/presentation/actions/services/recommendation_service.dart
-//
-// All HTTP communication with the Node.js backend.
-// Widgets NEVER import http directly — they call this service only.
-//
-// ── MOCK MODE ────────────────────────────────────────────────────────────────
-// Set _useMock = true  → returns hardcoded demo data instantly (no backend needed)
-// Set _useMock = false → calls http://localhost:3000 (requires backend running)
-//
-// Switch back to false once your Node.js server is running.
+// lib/data/repositories/recommendation_repository.dart
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/recommendation_model.dart';
 
-class RecommendationService {
-  // ── Toggle this ───────────────────────────────────────────────────────────
-  static const bool _useMock = true; // ← change to false when backend is ready
-  // ─────────────────────────────────────────────────────────────────────────
-
+class RecommendationRepository {
+  static const bool _useMock = true; // ← set false when backend is ready
+  
   static const String _baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://localhost:3000',
@@ -25,63 +14,55 @@ class RecommendationService {
 
   final http.Client _client;
 
-  RecommendationService({http.Client? client})
+  RecommendationRepository({http.Client? client})
       : _client = client ?? http.Client();
 
   Map<String, String> get _headers => {'Content-Type': 'application/json'};
 
-  Map<String, dynamic> _parseBody(http.Response response) {
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode >= 400 || body['success'] != true) {
-      throw Exception(body['error'] ?? 'Server error ${response.statusCode}');
+  Map<String, dynamic> _parseEnvelope(http.Response response) {
+    try {
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode >= 400 || body['success'] != true) {
+        throw Exception(body['error'] ?? 'Server error ${response.statusCode}');
+      }
+      return body['data'] as Map<String, dynamic>;
+    } catch (err) {
+      throw Exception('Response parse error: $err');
     }
-    return body['data'] as Map<String, dynamic>;
   }
-
-  // ── fetchRecommendations ──────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> fetchRecommendations(String businessId) async {
     if (_useMock) return _mockFetchRecommendations();
 
     try {
-      final uri = Uri.parse('$_baseUrl/api/recommendations/$businessId');
+      final uri      = Uri.parse('$_baseUrl/api/recommendations/$businessId');
       final response = await _client
           .get(uri, headers: _headers)
           .timeout(const Duration(seconds: 30));
-      final data = _parseBody(response);
-      return {
-        'summary': RecommendationSummary.fromJson(
-            data['summary'] as Map<String, dynamic>),
-        'recommendations': (data['recommendations'] as List<dynamic>)
-            .map((r) => Recommendation.fromJson(r as Map<String, dynamic>))
-            .toList(),
-      };
+      final data = _parseEnvelope(response);
+      return _parseRecommendationPayload(data);
     } catch (err) {
-      throw Exception('fetchRecommendations: $err');
+      throw Exception('fetchRecommendations failed: $err');
     }
   }
-
-  // ── fetchById ─────────────────────────────────────────────────────────────
 
   Future<Recommendation> fetchById(String id) async {
     if (_useMock) {
       final result = await _mockFetchRecommendations();
-      final list = result['recommendations'] as List<Recommendation>;
+      final list   = result['recommendations'] as List<Recommendation>;
       return list.firstWhere((r) => r.id == id, orElse: () => list.first);
     }
 
     try {
-      final uri = Uri.parse('$_baseUrl/api/recommendations/item/$id');
+      final uri      = Uri.parse('$_baseUrl/api/recommendations/item/$id');
       final response = await _client
           .get(uri, headers: _headers)
           .timeout(const Duration(seconds: 15));
-      return Recommendation.fromJson(_parseBody(response));
+      return Recommendation.fromJson(_parseEnvelope(response));
     } catch (err) {
-      throw Exception('fetchById: $err');
+      throw Exception('fetchById failed: $err');
     }
   }
-
-  // ── generateRecommendations ───────────────────────────────────────────────
 
   Future<Map<String, dynamic>> generateRecommendations({
     required String businessId,
@@ -91,87 +72,87 @@ class RecommendationService {
     if (_useMock) return _mockFetchRecommendations();
 
     try {
-      final uri = Uri.parse('$_baseUrl/api/recommendations/generate');
+      final uri      = Uri.parse('$_baseUrl/api/recommendations/generate');
       final response = await _client
-          .post(uri,
-              headers: _headers,
-              body: jsonEncode({
-                'businessId': businessId,
-                'riskId': riskId,
-                'financialSnapshot': financialSnapshot,
-              }))
+          .post(
+            uri,
+            headers: _headers,
+            body: jsonEncode({
+              'businessId':        businessId,
+              'riskId':            riskId,
+              'financialSnapshot': financialSnapshot,
+            }),
+          )
           .timeout(const Duration(seconds: 90));
-      final data = _parseBody(response);
-      return {
-        'summary': RecommendationSummary.fromJson(
-            data['summary'] as Map<String, dynamic>),
-        'recommendations': (data['recommendations'] as List<dynamic>)
-            .map((r) => Recommendation.fromJson(r as Map<String, dynamic>))
-            .toList(),
-      };
+      final data = _parseEnvelope(response);
+      return _parseRecommendationPayload(data);
     } catch (err) {
-      throw Exception('generateRecommendations: $err');
+      throw Exception('generateRecommendations failed: $err');
     }
   }
 
-  // ── markActioned ──────────────────────────────────────────────────────────
-
+  
   Future<Recommendation> markActioned(String id) async {
     if (_useMock) return _mockMarkActioned(id);
 
     try {
-      final uri = Uri.parse('$_baseUrl/api/recommendations/$id/action');
+      final uri      = Uri.parse('$_baseUrl/api/recommendations/$id/action');
       final response = await _client
           .patch(uri, headers: _headers)
           .timeout(const Duration(seconds: 15));
-      return Recommendation.fromJson(_parseBody(response));
+      return Recommendation.fromJson(_parseEnvelope(response));
     } catch (err) {
-      throw Exception('markActioned: $err');
+      throw Exception('markActioned failed: $err');
     }
   }
 
-  // ── updateRecommendation ──────────────────────────────────────────────────
-
+  
   Future<Recommendation> updateRecommendation(
       String id, Map<String, dynamic> fields) async {
     if (_useMock) return fetchById(id);
 
     try {
-      final uri = Uri.parse('$_baseUrl/api/recommendations/$id');
+      final uri      = Uri.parse('$_baseUrl/api/recommendations/$id');
       final response = await _client
           .patch(uri, headers: _headers, body: jsonEncode(fields))
           .timeout(const Duration(seconds: 15));
-      return Recommendation.fromJson(_parseBody(response));
+      return Recommendation.fromJson(_parseEnvelope(response));
     } catch (err) {
-      throw Exception('updateRecommendation: $err');
+      throw Exception('updateRecommendation failed: $err');
     }
   }
 
-  // ── deleteRecommendation ──────────────────────────────────────────────────
-
+  
   Future<void> deleteRecommendation(String id) async {
-    if (_useMock) return; // no-op in mock mode
+    if (_useMock) return;
 
     try {
-      final uri = Uri.parse('$_baseUrl/api/recommendations/$id');
+      final uri      = Uri.parse('$_baseUrl/api/recommendations/$id');
       final response = await _client
           .delete(uri, headers: _headers)
           .timeout(const Duration(seconds: 15));
-      _parseBody(response);
+      _parseEnvelope(response);
     } catch (err) {
-      throw Exception('deleteRecommendation: $err');
+      throw Exception('deleteRecommendation failed: $err');
     }
   }
 
-  // ═════════════════════════════════════════════════════════════════════════
-  // MOCK DATA — matches the FinSight AI mockup screens exactly
-  // (Maju Bakery & Cafe, 16 Apr 2026)
-  // ═════════════════════════════════════════════════════════════════════════
 
-  static final _now       = DateTime(2026, 4, 16, 8, 0);
-  static final _expiresAt = DateTime(2026, 4, 23, 8, 0);
+  Map<String, dynamic> _parseRecommendationPayload(Map<String, dynamic> data) {
+    return {
+      'summary': RecommendationSummary.fromJson(
+          data['summary'] as Map<String, dynamic>),
+      'recommendations': (data['recommendations'] as List<dynamic>)
+          .map((r) => Recommendation.fromJson(r as Map<String, dynamic>))
+          .toList(),
+    };
+  }
 
-  static final List<Recommendation> _mockRecs = [
+
+  static final DateTime _mockNow       = DateTime(2026, 4, 16, 8,  0);
+  static final DateTime _mockExpiresAt = DateTime(2026, 4, 23, 8,  0);
+
+  static final List<Recommendation> _seedRecs = [
     Recommendation(
       id:                   'mock-rec-001',
       businessId:           'demo-maju-bakery-001',
@@ -196,10 +177,10 @@ class RecommendationService {
         ActionStep(stepNumber: 3, description: 'Offer early payment discount of 1% if paid within 3 days'),
         ActionStep(stepNumber: 4, description: 'If no response in 48 hours, escalate to your account manager'),
       ],
-      relatedReference:     'INV-2026-089',
-      status:               'active',
-      generatedAt:          _now,
-      expiresAt:            _expiresAt,
+      relatedReference: 'INV-2026-089',
+      status:           'active',
+      generatedAt:      _mockNow,
+      expiresAt:        _mockExpiresAt,
     ),
     Recommendation(
       id:                   'mock-rec-002',
@@ -224,11 +205,11 @@ class RecommendationService {
         ActionStep(stepNumber: 3, description: 'Offer to pay a small early-settlement fee (e.g. RM 200) as goodwill'),
         ActionStep(stepNumber: 4, description: 'Get written confirmation of new due date before 10 May'),
       ],
-      relatedReference:     null,
-      status:               'actioned',
-      actionedAt:           DateTime(2026, 4, 16, 10, 30),
-      generatedAt:          _now,
-      expiresAt:            _expiresAt,
+      relatedReference: null,
+      status:           'actioned',
+      actionedAt:       DateTime(2026, 4, 16, 10, 30),
+      generatedAt:      _mockNow,
+      expiresAt:        _mockExpiresAt,
     ),
     Recommendation(
       id:                   'mock-rec-003',
@@ -251,10 +232,10 @@ class RecommendationService {
         ActionStep(stepNumber: 2, description: 'Request payment processing timeline confirmation'),
         ActionStep(stepNumber: 3, description: 'Send WhatsApp follow-up to your Axiata contact if no response in 2 days'),
       ],
-      relatedReference:     'INV-2026-112',
-      status:               'active',
-      generatedAt:          _now,
-      expiresAt:            _expiresAt,
+      relatedReference: 'INV-2026-112',
+      status:           'active',
+      generatedAt:      _mockNow,
+      expiresAt:        _mockExpiresAt,
     ),
     Recommendation(
       id:                   'mock-rec-004',
@@ -278,10 +259,10 @@ class RecommendationService {
         ActionStep(stepNumber: 2, description: 'Reduce daily budget on remaining campaigns by 20%'),
         ActionStep(stepNumber: 3, description: 'Monitor engagement weekly — restore budget if leads drop >15%'),
       ],
-      relatedReference:     null,
-      status:               'active',
-      generatedAt:          _now,
-      expiresAt:            _expiresAt,
+      relatedReference: null,
+      status:           'active',
+      generatedAt:      _mockNow,
+      expiresAt:        _mockExpiresAt,
     ),
     Recommendation(
       id:                   'mock-rec-005',
@@ -298,8 +279,7 @@ class RecommendationService {
           'Financing provides a credit line buffer. Interest rate is 4-6% per '
           'annum. Even if you resolve the cash gap through collections, having '
           'an approved credit facility provides security for future seasonal '
-          'dips. Application requires 12-month bank statements (which you now '
-          'have structured).',
+          'dips. Application requires 12-month bank statements.',
       projectedImpactValue: 50000,
       impactType:           'Available Financing',
       actionSteps: const [
@@ -308,57 +288,47 @@ class RecommendationService {
         ActionStep(stepNumber: 3, description: 'Submit BizMaju Micro Financing application (max RM 50,000, up to 5 years)'),
         ActionStep(stepNumber: 4, description: 'Processing time: 2-4 weeks for approval'),
       ],
-      relatedReference:     null,
-      status:               'actioned',
-      actionedAt:           DateTime(2026, 4, 16, 14, 0),
-      generatedAt:          _now,
-      expiresAt:            _expiresAt,
+      relatedReference: null,
+      status:           'actioned',
+      actionedAt:       DateTime(2026, 4, 16, 14, 0),
+      generatedAt:      _mockNow,
+      expiresAt:        _mockExpiresAt,
     ),
   ];
 
-  // Mutable local copy so markActioned updates are reflected instantly in UI
-  static final List<Recommendation> _mutableMockRecs =
-      List<Recommendation>.from(_mockRecs);
+  
+  static final List<Recommendation> _mutableRecs =
+      List<Recommendation>.from(_seedRecs);
 
   Future<Map<String, dynamic>> _mockFetchRecommendations() async {
-    // Simulate a brief network delay so loading spinner is visible
     await Future.delayed(const Duration(milliseconds: 400));
 
-    final active = _mutableMockRecs
-        .where((r) => r.status != 'expired')
-        .toList();
+    final active       = _mutableRecs.where((r) => r.status != 'expired').toList();
+    final nonFinancing = active.where((r) => r.impactType != 'Available Financing').toList();
 
-    final nonFinancing = active
-        .where((r) => r.impactType != 'Available Financing')
-        .toList();
-
-    final totalImpact = nonFinancing.fold<double>(
-        0, (sum, r) => sum + r.projectedImpactValue);
-    final cashInflow  = nonFinancing
-        .where((r) => r.impactType == 'Cash Inflow')
-        .fold<double>(0, (s, r) => s + r.projectedImpactValue);
-    final cashBuffer  = nonFinancing
-        .where((r) => r.impactType == 'Cash Buffer')
-        .fold<double>(0, (s, r) => s + r.projectedImpactValue);
-    final costSavings = nonFinancing
-        .where((r) => r.impactType == 'Cost Savings')
-        .fold<double>(0, (s, r) => s + r.projectedImpactValue);
+    final totalImpact = nonFinancing.fold<double>(0.0, (s, r) => s + r.projectedImpactValue);
+    final cashInflow  = nonFinancing.where((r) => r.impactType == 'Cash Inflow')
+        .fold<double>(0.0, (s, r) => s + r.projectedImpactValue);
+    final cashBuffer  = nonFinancing.where((r) => r.impactType == 'Cash Buffer')
+        .fold<double>(0.0, (s, r) => s + r.projectedImpactValue);
+    final costSavings = nonFinancing.where((r) => r.impactType == 'Cost Savings')
+        .fold<double>(0.0, (s, r) => s + r.projectedImpactValue);
 
     final summary = RecommendationSummary(
       totalActionableImpact: totalImpact,
       cashInflow:            cashInflow,
       cashBuffer:            cashBuffer,
       costSavings:           costSavings,
-      easyActions:   active.where((r) => r.difficulty == 'Easy Action').length,
-      totalRecommendations: active.length,
-      canActToday:   active.where((r) {
+      easyActions:           active.where((r) => r.difficulty == 'Easy Action').length,
+      totalRecommendations:  active.length,
+      canActToday: active.where((r) {
         final tf = r.timeframe.toLowerCase();
         return tf.contains('today') ||
-               tf.contains('7 days') ||
-               (tf.contains('week') && !tf.contains('2 week') && !tf.contains('2-'));
+            tf.contains('7 days') ||
+            (tf.contains('week') && !tf.contains('2 week') && !tf.contains('2-'));
       }).length,
       impactBreakdown: active.map((r) => {
-        'rank':                  r.rank,
+        'rank':                   r.rank,
         'projected_impact_value': r.projectedImpactValue,
         'impact_type':            r.impactType,
       }).toList(),
@@ -369,13 +339,13 @@ class RecommendationService {
 
   Future<Recommendation> _mockMarkActioned(String id) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    final idx = _mutableMockRecs.indexWhere((r) => r.id == id);
+    final idx = _mutableRecs.indexWhere((r) => r.id == id);
     if (idx == -1) throw Exception('Recommendation $id not found');
-    final updated = _mutableMockRecs[idx].copyWith(
+    final updated = _mutableRecs[idx].copyWith(
       status:     'actioned',
       actionedAt: DateTime.now(),
     );
-    _mutableMockRecs[idx] = updated;
+    _mutableRecs[idx] = updated;
     return updated;
   }
 }
