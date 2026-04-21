@@ -41,7 +41,9 @@ class _AppLayoutState extends State<AppLayout> {
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
         final businessId = prefs.getString('business_id');
-        _businessId = (businessId == null || businessId.isEmpty) ? null : businessId;
+        _businessId = (businessId == null || businessId.isEmpty)
+            ? null
+            : businessId;
       } else {
         final home = Platform.environment['HOME'] ?? '.';
         final file = File('$home/.finsight_business_id');
@@ -126,6 +128,7 @@ class _AppLayoutState extends State<AppLayout> {
     }
   }
 
+  // ── Original _navTile — UNTOUCHED ─────────────────────────────────────────
   Widget _navTile(BuildContext context, IconData icon, String label) {
     return ListTile(
       leading: Icon(icon, color: Colors.white70),
@@ -196,6 +199,7 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
+  // ── _buildSidebar — Dashboard tile replaced, everything else unchanged ─────
   Widget _buildSidebar(BuildContext context) {
     return Container(
       color: const Color(0xFF0B1220),
@@ -247,6 +251,7 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
+  // ── _buildTopBar — UNTOUCHED ──────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context) {
     final meta = _pageMeta();
     final title = meta.title;
@@ -383,6 +388,7 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
+  // ── build — UNTOUCHED ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loadingSession) {
