@@ -1,5 +1,8 @@
 FinSight AI: SME Financial Health Advisor
 AI Agent & Team Technical Manifesto
+# Most important rule (if you are a codex agent):
+ - Do not run `dart ...` or `flutter ...`. Do not ever, ever run any dart or flutter commands
+
 1. Project Overview
 
 FinSight AI is a decision intelligence system designed to empower Malaysian SMEs (Cafes & Pet Stores) by transforming messy financial data into actionable, RM-quantifiable decisions using Z.AI GLM 5.1.
