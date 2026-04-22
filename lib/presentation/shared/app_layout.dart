@@ -14,6 +14,7 @@ import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';         // zh's risk navigation
 import '../actions/recommendation_page.dart';     // xy's recommendations navigation
 import '../dashboard/dashboard_page.dart'; // ← NEW: for dashboard tile + callbacks
+import '../forecast/forecast_page.dart';   // ← NEW: for forecast navigation
 
 class AppLayout extends StatelessWidget {
   final Widget child;
@@ -122,6 +123,32 @@ class AppLayout extends StatelessWidget {
     );
   }
 
+  // ── NEW: Forecast nav tile ─────────────────────────────────────────────────
+  Widget _forecastNavTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.trending_up, color: Colors.white70),
+      title: const Text(
+        'Cash Flow Forecast',
+        style: TextStyle(color: Colors.white70),
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AppLayout(
+              title: 'Cash Flow Forecast',
+              subtitle: '8-week projection with AI insights',
+              child: ForecastContent(
+                onGoToDashboard: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ── _buildSidebar — Dashboard tile replaced, everything else unchanged ─────
   Widget _buildSidebar(BuildContext context) {
     return Container(
@@ -155,7 +182,7 @@ class AppLayout extends StatelessWidget {
                   _dashboardNavTile(context),        // ← NEW (replaces SnackBar _navTile)
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
-                  _navTile(context, Icons.show_chart,   'Cash Flow Forecast'),
+                  _forecastNavTile(context),         // ← Updated: now uses real implementation
                   _riskAlertsNavTile(context),       // zh's tile — unchanged
                   _recommendationsNavTile(context),  // xy's tile — unchanged
                 ],
