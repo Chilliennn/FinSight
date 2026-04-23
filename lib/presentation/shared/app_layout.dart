@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';
 import '../actions/recommendation_page.dart';
 import '../dashboard/dashboard_page.dart';
+import '../login/login_page.dart';
 
 enum _AppSection { dashboard, upload, risks, recommendations }
 
@@ -22,11 +24,42 @@ class _AppLayoutState extends State<AppLayout> {
   );
 
   late _AppSection _currentSection;
+  String? _businessId;
+  bool _loadingSession = true;
+
+  File get _sessionFile {
+    final home = Platform.environment['HOME'] ?? '.';
+    return File('$home/.finsight_business_id');
+  }
 
   @override
   void initState() {
     super.initState();
     _currentSection = widget.initialSection;
+    _loadBusinessId();
+  }
+
+  Future<void> _loadBusinessId() async {
+    try {
+      if (await _sessionFile.exists()) {
+        final businessId = (await _sessionFile.readAsString()).trim();
+        _businessId = businessId.isEmpty ? null : businessId;
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loadingSession = false;
+      });
+    }
+  }
+
+  Future<void> _saveBusinessId(String businessId) async {
+    await _sessionFile.writeAsString(businessId);
+    if (!mounted) return;
+    setState(() {
+      _businessId = businessId;
+      _currentSection = _AppSection.dashboard;
+    });
   }
 
   void _setSection(_AppSection section, {bool closeDrawer = false}) {
@@ -58,6 +91,11 @@ class _AppLayoutState extends State<AppLayout> {
   }
 
   Widget _buildCurrentPage() {
+    final businessId = _businessId;
+    if (businessId == null) {
+      return const SizedBox.shrink();
+    }
+
     switch (_currentSection) {
       case _AppSection.dashboard:
         return DashboardContent(
@@ -68,21 +106,14 @@ class _AppLayoutState extends State<AppLayout> {
         return const UploadPage();
       case _AppSection.risks:
         return RisksPage(
-          businessId: 'maju-bakery-demo',
+          businessId: businessId,
           api: RisksApi.http(baseUrl: _apiBaseUrl),
         );
       case _AppSection.recommendations:
-        return const RecommendationPage(
-          businessId: 'biz_maju_001',
-          businessName: 'Maju Bakery & Cafe',
-          businessType: 'F&B / Retail Bakery',
-          riskId: 'demo-risk-cashgap-001',
-          currentBalance: 18500,
-        );
+        return RecommendationPage(businessId: businessId);
     }
   }
 
-  // ── Generic nav tile (SnackBar placeholder) ───────────────────────────────
   Widget _navTile(BuildContext context, IconData icon, String label) {
     return ListTile(
       leading: Icon(icon, color: Colors.white70),
@@ -95,7 +126,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── Dashboard nav tile ────────────────────────────────────────────────────
   Widget _dashboardNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.dashboard, color: Colors.white70),
@@ -109,7 +139,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── Upload nav tile ───────────────────────────────────────────────────────
   Widget _uploadNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.upload_file, color: Colors.white70),
@@ -126,7 +155,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── Risk Alerts nav tile ──────────────────────────────────────────────────
   Widget _riskAlertsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.warning_amber_outlined, color: Colors.white70),
@@ -140,7 +168,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── Recommendations nav tile ──────────────────────────────────────────────
   Widget _recommendationsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.lightbulb_outline, color: Colors.white70),
@@ -157,34 +184,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── NEW: Forecast nav tile ─────────────────────────────────────────────────
-  Widget _forecastNavTile(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.trending_up, color: Colors.white70),
-      title: const Text(
-        'Cash Flow Forecast',
-        style: TextStyle(color: Colors.white70),
-      ),
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const AppLayout(
-              title: 'Recommendations',
-              child: RecommendationPage(
-                businessId: 'biz_maju_001',
-                businessName: 'Maju Bakery & Cafe',
-                businessType: 'F&B / Retail Bakery',
-                riskId: 'demo-risk-cashgap-001',
-                currentBalance: 18500,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // ── Sidebar ───────────────────────────────────────────────────────────────
   Widget _buildSidebar(BuildContext context) {
     return Container(
       color: const Color(0xFF0B1220),
@@ -226,8 +225,8 @@ class _AppLayoutState extends State<AppLayout> {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: RiskAlertsSidebarBadge(
-                businessId: 'maju-bakery-demo',
-                api: RisksApi.http(baseUrl: 'http://localhost:3000'),
+                businessId: _businessId!,
+                api: RisksApi.http(baseUrl: _apiBaseUrl),
               ),
             ),
           ],
@@ -236,7 +235,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── Top bar ───────────────────────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context) {
     final meta = _pageMeta();
     final title = meta.title;
@@ -373,9 +371,19 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    if (_loadingSession) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_businessId == null) {
+      return LoginPage(onLoginSuccess: _saveBusinessId);
+    }
+
     final meta = _pageMeta();
     final title = meta.title;
 
