@@ -1,20 +1,16 @@
 // lib/presentation/shared/app_layout.dart
 //
-// Changes from previous version (document 9):
-//   1. Added _dashboardNavTile() — same pattern as zh's _riskAlertsNavTile.
-//      Dashboard tile now navigates back to dashboard instead of showing SnackBar.
-//   2. DashboardContent now receives onGoToRecommendations + onGoToRisks callbacks.
-//      This is how the dashboard's "View all 5" and "View Risks" buttons work
-//      without dashboard_page.dart needing to import app_layout.dart (no circular dep).
-//   3. import for dashboard_page.dart added.
-//   4. All other code (zh's tiles, _navTile, _buildTopBar, build) is UNCHANGED.
+// Changes from previous version:
+//   1. Added _dashboardNavTile() — navigates back to dashboard root.
+//   2. DashboardContent receives onGoToRecommendations + onGoToRisks callbacks.
+//   3. RecommendationPage now receives businessType and currentBalance
+//      (required by the updated page that triggers Z.AI generation).
 
 import 'package:flutter/material.dart';
 import '../upload/upload_page.dart';
-import '../risks/risks_page.dart';         // zh's risk navigation
-import '../actions/recommendation_page.dart';     // xy's recommendations navigation
-import '../dashboard/dashboard_page.dart'; // ← NEW: for dashboard tile + callbacks
-import '../forecast/forecast_page.dart';   // ← NEW: for forecast navigation
+import '../risks/risks_page.dart';
+import '../actions/recommendation_page.dart';
+import '../dashboard/dashboard_page.dart';
 
 class AppLayout extends StatelessWidget {
   final Widget child;
@@ -30,7 +26,7 @@ class AppLayout extends StatelessWidget {
     this.showAiStatus = false,
   });
 
-  // ── Original _navTile — UNTOUCHED ─────────────────────────────────────────
+  // ── Generic nav tile (SnackBar placeholder) ───────────────────────────────
   Widget _navTile(BuildContext context, IconData icon, String label) {
     return ListTile(
       leading: Icon(icon, color: Colors.white70),
@@ -42,20 +38,18 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── NEW: Dashboard nav tile ───────────────────────────────────────────────
-  // Navigates back to Dashboard. Uses popUntil so it works whether we got here
-  // via push (from dashboard) or are already at root.
+  // ── Dashboard nav tile ────────────────────────────────────────────────────
   Widget _dashboardNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.dashboard, color: Colors.white70),
       title: const Text('Dashboard', style: TextStyle(color: Colors.white70)),
       onTap: () {
-        // Pop back to the first route (Dashboard is always the root).
         Navigator.of(context).popUntil((route) => route.isFirst);
       },
     );
   }
 
+  // ── Upload nav tile ───────────────────────────────────────────────────────
   Widget _uploadNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.upload_file, color: Colors.white70),
@@ -77,7 +71,7 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── zh's Risk Alerts tile — UNTOUCHED ─────────────────────────────────────
+  // ── Risk Alerts nav tile ──────────────────────────────────────────────────
   Widget _riskAlertsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.warning_amber_outlined, color: Colors.white70),
@@ -98,7 +92,7 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── Recommendations nav tile — UNTOUCHED ──────────────────────────────────
+  // ── Recommendations nav tile ──────────────────────────────────────────────
   Widget _recommendationsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.lightbulb_outline, color: Colors.white70),
@@ -112,9 +106,11 @@ class AppLayout extends StatelessWidget {
             builder: (_) => const AppLayout(
               title: 'Recommendations',
               child: RecommendationPage(
-                businessId:   'demo-maju-bakery-001',
-                businessName: 'Maju Bakery & Cafe',
-                riskId:       'demo-risk-cashgap-001',
+                businessId:     'biz_maju_001',
+                businessName:   'Maju Bakery & Cafe',
+                businessType:   'F&B / Retail Bakery',
+                riskId:         'demo-risk-cashgap-001',
+                currentBalance: 18500,
               ),
             ),
           ),
@@ -179,12 +175,13 @@ class AppLayout extends StatelessWidget {
             Expanded(
               child: ListView(
                 children: [
-                  _dashboardNavTile(context),        // ← NEW (replaces SnackBar _navTile)
+                  _dashboardNavTile(context),
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
-                  _forecastNavTile(context),         // ← Updated: now uses real implementation
-                  _riskAlertsNavTile(context),       // zh's tile — unchanged
-                  _recommendationsNavTile(context),  // xy's tile — unchanged
+                  _forecastNavTile(context),
+                  _navTile(context, Icons.show_chart,   'Cash Flow Forecast'),
+                  _riskAlertsNavTile(context),
+                  _recommendationsNavTile(context),
                 ],
               ),
             ),
@@ -201,7 +198,7 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── _buildTopBar — UNTOUCHED ──────────────────────────────────────────────
+  // ── Top bar ───────────────────────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context) {
     if (subtitle == null && !showAiStatus) {
       return Container(
@@ -333,7 +330,7 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── build — UNTOUCHED ─────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -369,9 +366,10 @@ class AppLayout extends StatelessWidget {
   }
 }
 
-// ── Helper to build the Dashboard route with navigation callbacks ─────────────
-// Call this from main.dart as the initial route's body.
-// Keeps DashboardContent free of AppLayout imports (no circular dependency).
+// ── buildDashboardWithNav ─────────────────────────────────────────────────────
+// Call from main.dart as the initial route body.
+// Passes navigation callbacks to DashboardContent without creating a circular
+// dependency between dashboard_page.dart and app_layout.dart.
 Widget buildDashboardWithNav(BuildContext context) {
   return DashboardContent(
     onGoToRecommendations: () {
@@ -380,9 +378,11 @@ Widget buildDashboardWithNav(BuildContext context) {
           builder: (_) => const AppLayout(
             title: 'Recommendations',
             child: RecommendationPage(
-              businessId:   'demo-maju-bakery-001',
-              businessName: 'Maju Bakery & Cafe',
-              riskId:       'demo-risk-cashgap-001',
+              businessId:     'biz_maju_001',
+              businessName:   'Maju Bakery & Cafe',
+              businessType:   'F&B / Retail Bakery',
+              riskId:         'demo-risk-cashgap-001',
+              currentBalance: 18500,
             ),
           ),
         ),
