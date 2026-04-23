@@ -157,65 +157,80 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
+  // ── NEW: Forecast nav tile ─────────────────────────────────────────────────
+  Widget _forecastNavTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.trending_up, color: Colors.white70),
+      title: const Text(
+        'Cash Flow Forecast',
+        style: TextStyle(color: Colors.white70),
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const AppLayout(
+              title: 'Recommendations',
+              child: RecommendationPage(
+                businessId: 'biz_maju_001',
+                businessName: 'Maju Bakery & Cafe',
+                businessType: 'F&B / Retail Bakery',
+                riskId: 'demo-risk-cashgap-001',
+                currentBalance: 18500,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ── Sidebar ───────────────────────────────────────────────────────────────
   Widget _buildSidebar(BuildContext context) {
     return Container(
       color: const Color(0xFF0B1220),
       child: SafeArea(
-        child: Builder(
-          builder: (sidebarContext) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: const [
-                      CircleAvatar(child: Icon(Icons.pie_chart)),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'FinSight AI',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: const [
+                  CircleAvatar(child: Icon(Icons.pie_chart)),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'FinSight AI',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                const Divider(color: Colors.white24),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      _dashboardNavTile(sidebarContext),
-                      _uploadNavTile(sidebarContext),
-                      _navTile(
-                        sidebarContext,
-                        Icons.receipt_long,
-                        'Transactions',
-                      ),
-                      _navTile(
-                        sidebarContext,
-                        Icons.show_chart,
-                        'Cash Flow Forecast',
-                      ),
-                      _riskAlertsNavTile(sidebarContext),
-                      _recommendationsNavTile(sidebarContext),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: RiskAlertsSidebarBadge(
-                    businessId: 'maju-bakery-demo',
-                    api: RisksApi.http(baseUrl: _apiBaseUrl),
-                  ),
-                ),
-              ],
-            );
-          },
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white24),
+            Expanded(
+              child: ListView(
+                children: [
+                  _dashboardNavTile(context),
+                  _uploadNavTile(context),
+                  _navTile(context, Icons.receipt_long, 'Transactions'),
+                  _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
+                  _riskAlertsNavTile(context),
+                  _recommendationsNavTile(context),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: RiskAlertsSidebarBadge(
+                businessId: 'maju-bakery-demo',
+                api: RisksApi.http(baseUrl: 'http://localhost:3000'),
+              ),
+            ),
+          ],
         ),
       ),
     );
