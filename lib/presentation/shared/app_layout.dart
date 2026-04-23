@@ -119,6 +119,32 @@ class AppLayout extends StatelessWidget {
     );
   }
 
+  // ── NEW: Forecast nav tile ─────────────────────────────────────────────────
+  Widget _forecastNavTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.trending_up, color: Colors.white70),
+      title: const Text(
+        'Cash Flow Forecast',
+        style: TextStyle(color: Colors.white70),
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AppLayout(
+              title: 'Cash Flow Forecast',
+              subtitle: '8-week projection with AI insights',
+              child: ForecastContent(
+                onGoToDashboard: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // ── Sidebar ───────────────────────────────────────────────────────────────
   Widget _buildSidebar(BuildContext context) {
     return Container(
@@ -152,6 +178,7 @@ class AppLayout extends StatelessWidget {
                   _dashboardNavTile(context),
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
+                  _forecastNavTile(context),
                   _navTile(context, Icons.show_chart,   'Cash Flow Forecast'),
                   _riskAlertsNavTile(context),
                   _recommendationsNavTile(context),
