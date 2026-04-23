@@ -11,6 +11,7 @@ import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';
 import '../actions/recommendation_page.dart';
 import '../dashboard/dashboard_page.dart';
+import '../forecast/forecast_page.dart';
 
 class AppLayout extends StatelessWidget {
   final Widget child;
@@ -64,7 +65,10 @@ class AppLayout extends StatelessWidget {
             builder: (_) => const AppLayout(
               title: 'Upload Documents',
               showAiStatus: true,
-              child: UploadPage(),
+              child: UploadPage(
+                businessId: '680000000000000000000001',
+                businessName: 'Maju Bakery & Cafe Sdn Bhd',
+              ),
             ),
           ),
         );
@@ -180,7 +184,6 @@ class AppLayout extends StatelessWidget {
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
                   _forecastNavTile(context),
-                  _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
                   _riskAlertsNavTile(context),
                   _recommendationsNavTile(context),
                 ],
