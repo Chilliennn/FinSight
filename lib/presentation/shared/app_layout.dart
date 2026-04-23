@@ -122,6 +122,9 @@ class _AppLayoutState extends State<AppLayout> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$label tapped')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$label tapped')));
       },
     );
   }
@@ -176,6 +179,45 @@ class _AppLayoutState extends State<AppLayout> {
         style: TextStyle(color: Colors.white70),
       ),
       onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const AppLayout(
+              title: 'Recommendations',
+              child: RecommendationPage(
+                businessId: 'biz_maju_001',
+                businessName: 'Maju Bakery & Cafe',
+                businessType: 'F&B / Retail Bakery',
+                riskId: 'demo-risk-cashgap-001',
+                currentBalance: 18500,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── NEW: Forecast nav tile ─────────────────────────────────────────────────
+  Widget _forecastNavTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.trending_up, color: Colors.white70),
+      title: const Text(
+        'Cash Flow Forecast',
+        style: TextStyle(color: Colors.white70),
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => AppLayout(
+              title: 'Cash Flow Forecast',
+              subtitle: '8-week projection with AI insights',
+              child: ForecastContent(
+                onGoToDashboard: () {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+              ),
+            ),
+          ),
         _setSection(
           _AppSection.recommendations,
           closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
@@ -216,6 +258,7 @@ class _AppLayoutState extends State<AppLayout> {
                   _dashboardNavTile(context),
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
+                  _forecastNavTile(context),
                   _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
                   _riskAlertsNavTile(context),
                   _recommendationsNavTile(context),
