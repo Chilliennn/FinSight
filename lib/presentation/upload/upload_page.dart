@@ -1,15 +1,90 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-class UploadPage extends StatelessWidget {
-  const UploadPage({super.key});
+import '../../data/repositories/document_upload_repository.dart';
 
+class UploadPage extends StatefulWidget {
+  final String businessId;
+  final String businessName;
+
+  const UploadPage({
+    super.key,
+    required this.businessId,
+    required this.businessName,
+  });
+
+  @override
+  State<UploadPage> createState() => _UploadPageState();
+}
+
+class _UploadPageState extends State<UploadPage> {
   static const Color _ink = Color(0xFF020817);
   static const Color _surface = Color(0xFFF8FAFC);
 
-  void _showComingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label will connect to document ingestion next.')),
-    );
+  final DocumentUploadRepository _repository = DocumentUploadRepository();
+
+  bool _isUploading = false;
+  String? _error;
+  UploadedDocumentResult? _uploadedDocument;
+  PlatformFile? _selectedFile;
+
+  Future<void> _browseAndUpload() async {
+    setState(() {
+      _error = null;
+    });
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowMultiple: false,
+        withData: true,
+        allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.first;
+      setState(() {
+        _selectedFile = file;
+        _isUploading = true;
+        _uploadedDocument = null;
+      });
+
+      final uploaded = await _repository.uploadDocument(
+        businessId: widget.businessId,
+        file: file,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _uploadedDocument = uploaded;
+        _isUploading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${file.name} uploaded. Ready for extraction next.'),
+        ),
+      );
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _isUploading = false;
+        _error = err.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    if (bytes >= 1024) {
+      return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    }
+    return '$bytes B';
   }
 
   @override
@@ -74,8 +149,62 @@ class UploadPage extends StatelessWidget {
           ),
           const SizedBox(height: 34),
           _DropZone(
-            onBrowse: () => _showComingSoon(context, 'Browse Files'),
+            isUploading: _isUploading,
+            onBrowse: _browseAndUpload,
           ),
+          if (_selectedFile != null || _uploadedDocument != null || _error != null)
+            const SizedBox(height: 20),
+          if (_selectedFile != null)
+            _UploadStatusCard(
+              title: _selectedFile!.name,
+              subtitle: _isUploading
+                  ? 'Uploading to Cloudflare R2 for ${widget.businessName}'
+                  : 'Selected ${_formatFileSize(_selectedFile!.size)}',
+              leadingColor: _isUploading
+                  ? const Color(0xFF2563EB)
+                  : const Color(0xFF0F172A),
+              trailing: _isUploading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.3),
+                    )
+                  : Text(
+                      _formatFileSize(_selectedFile!.size),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          if (_uploadedDocument != null) ...[
+            const SizedBox(height: 12),
+            _UploadStatusCard(
+              title: 'Document uploaded',
+              subtitle:
+                  '${_uploadedDocument!.fileName} stored successfully with status "${_uploadedDocument!.status}"',
+              leadingColor: const Color(0xFF059669),
+              trailing: const Icon(
+                Icons.check_circle,
+                color: Color(0xFF10B981),
+                size: 22,
+              ),
+            ),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            _UploadStatusCard(
+              title: 'Upload failed',
+              subtitle: _error!,
+              leadingColor: const Color(0xFFB91C1C),
+              trailing: const Icon(
+                Icons.error_outline,
+                color: Color(0xFFEF4444),
+                size: 22,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -129,9 +258,11 @@ class _FormatChip extends StatelessWidget {
 }
 
 class _DropZone extends StatelessWidget {
+  final bool isUploading;
   final VoidCallback onBrowse;
 
   const _DropZone({
+    required this.isUploading,
     required this.onBrowse,
   });
 
@@ -156,27 +287,29 @@ class _DropZone extends StatelessWidget {
                   color: const Color(0xFFEFF3F8),
                   borderRadius: BorderRadius.circular(19),
                 ),
-                child: const Icon(
-                  Icons.upload_rounded,
+                child: Icon(
+                  isUploading ? Icons.cloud_upload_outlined : Icons.upload_rounded,
                   size: 42,
-                  color: Color(0xFF94A3B8),
+                  color: const Color(0xFF94A3B8),
                 ),
               ),
               const SizedBox(height: 26),
-              const Text(
-                'Drag & drop your documents',
+              Text(
+                isUploading ? 'Uploading your document' : 'Drag & drop your documents',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Color(0xFF020817),
                   fontSize: 21,
                   fontWeight: FontWeight.w800,
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'or click to browse . PDF, JPG, PNG up to 10MB',
+              Text(
+                isUploading
+                    ? 'Your file is being saved and registered for ingestion.'
+                    : 'or click to browse . PDF, JPG, PNG up to 10MB',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Color(0xFF64748B),
                   fontSize: 16,
                   height: 1.4,
@@ -189,8 +322,8 @@ class _DropZone extends StatelessWidget {
                 alignment: WrapAlignment.center,
                 children: [
                   _PrimaryUploadButton(
-                    label: 'Browse Files',
-                    onPressed: onBrowse,
+                    label: isUploading ? 'Uploading...' : 'Browse Files',
+                    onPressed: isUploading ? null : onBrowse,
                   ),
                 ],
               ),
@@ -202,9 +335,79 @@ class _DropZone extends StatelessWidget {
   }
 }
 
+class _UploadStatusCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color leadingColor;
+  final Widget trailing;
+
+  const _UploadStatusCard({
+    required this.title,
+    required this.subtitle,
+    required this.leadingColor,
+    required this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: leadingColor.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.insert_drive_file_outlined,
+              color: leadingColor,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF0F172A),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
 class _PrimaryUploadButton extends StatelessWidget {
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   const _PrimaryUploadButton({
     required this.label,
@@ -220,7 +423,9 @@ class _PrimaryUploadButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: const Color(0xFF2563EB),
+          disabledBackgroundColor: const Color(0xFF93C5FD),
           foregroundColor: Colors.white,
+          disabledForegroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 29),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),

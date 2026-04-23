@@ -11,6 +11,7 @@ import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';
 import '../actions/recommendation_page.dart';
 import '../dashboard/dashboard_page.dart';
+import '../forecast/forecast_page.dart';
 
 class AppLayout extends StatelessWidget {
   final Widget child;
@@ -62,8 +63,12 @@ class AppLayout extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => const AppLayout(
               title: 'Upload Documents',
+              subtitle: 'Maju Bakery & Cafe Sdn Bhd . 16 Apr 2026',
               showAiStatus: true,
-              child: UploadPage(),
+              child: UploadPage(
+                businessId: '680000000000000000000001',
+                businessName: 'Maju Bakery & Cafe Sdn Bhd',
+              ),
             ),
           ),
         );
