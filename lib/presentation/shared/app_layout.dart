@@ -33,8 +33,9 @@ class AppLayout extends StatelessWidget {
       leading: Icon(icon, color: Colors.white70),
       title: Text(label, style: const TextStyle(color: Colors.white70)),
       onTap: () {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$label tapped')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$label tapped')));
       },
     );
   }
@@ -86,7 +87,7 @@ class AppLayout extends StatelessWidget {
             builder: (_) => AppLayout(
               title: 'Risk Alerts',
               child: RisksPage(
-                businessId: 'maju-bakery-demo',
+                businessId: 'biz_maju_001',
                 api: RisksApi.http(baseUrl: 'http://localhost:3000'),
               ),
             ),
@@ -110,10 +111,10 @@ class AppLayout extends StatelessWidget {
             builder: (_) => const AppLayout(
               title: 'Recommendations',
               child: RecommendationPage(
-                businessId:     'biz_maju_001',
-                businessName:   'Maju Bakery & Cafe',
-                businessType:   'F&B / Retail Bakery',
-                riskId:         'demo-risk-cashgap-001',
+                businessId: 'biz_maju_001',
+                businessName: 'Maju Bakery & Cafe',
+                businessType: 'F&B / Retail Bakery',
+                riskId: 'demo-risk-cashgap-001',
                 currentBalance: 18500,
               ),
             ),
@@ -191,7 +192,7 @@ class AppLayout extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: RiskAlertsSidebarBadge(
-                businessId: 'maju-bakery-demo',
+                businessId: 'biz_maju_001',
                 api: RisksApi.http(baseUrl: 'http://localhost:3000'),
               ),
             ),
@@ -381,10 +382,10 @@ Widget buildDashboardWithNav(BuildContext context) {
           builder: (_) => const AppLayout(
             title: 'Recommendations',
             child: RecommendationPage(
-              businessId:     'biz_maju_001',
-              businessName:   'Maju Bakery & Cafe',
-              businessType:   'F&B / Retail Bakery',
-              riskId:         'demo-risk-cashgap-001',
+              businessId: 'biz_maju_001',
+              businessName: 'Maju Bakery & Cafe',
+              businessType: 'F&B / Retail Bakery',
+              riskId: 'demo-risk-cashgap-001',
               currentBalance: 18500,
             ),
           ),
@@ -397,7 +398,7 @@ Widget buildDashboardWithNav(BuildContext context) {
           builder: (_) => AppLayout(
             title: 'Risk Alerts',
             child: RisksPage(
-              businessId: 'maju-bakery-demo',
+              businessId: 'biz_maju_001',
               api: RisksApi.http(baseUrl: 'http://localhost:3000'),
             ),
           ),
