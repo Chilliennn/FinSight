@@ -75,7 +75,6 @@ class UploadPage extends StatelessWidget {
           const SizedBox(height: 34),
           _DropZone(
             onBrowse: () => _showComingSoon(context, 'Browse Files'),
-            onDemo: () => _showComingSoon(context, 'Try Demo Upload'),
           ),
         ],
       ),
@@ -131,11 +130,9 @@ class _FormatChip extends StatelessWidget {
 
 class _DropZone extends StatelessWidget {
   final VoidCallback onBrowse;
-  final VoidCallback onDemo;
 
   const _DropZone({
     required this.onBrowse,
-    required this.onDemo,
   });
 
   @override
@@ -195,10 +192,6 @@ class _DropZone extends StatelessWidget {
                     label: 'Browse Files',
                     onPressed: onBrowse,
                   ),
-                  _DemoUploadButton(
-                    label: 'Try Demo Upload',
-                    onPressed: onDemo,
-                  ),
                 ],
               ),
             ],
@@ -238,45 +231,6 @@ class _PrimaryUploadButton extends StatelessWidget {
           ),
         ),
         child: Text(label),
-      ),
-    );
-  }
-}
-
-class _DemoUploadButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
-
-  const _DemoUploadButton({
-    required this.label,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 54,
-      child: FilledButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(
-          Icons.bolt_outlined,
-          color: Color(0xFFF59E0B),
-          size: 22,
-        ),
-        label: Text(label),
-        style: FilledButton.styleFrom(
-          elevation: 0,
-          backgroundColor: const Color(0xFFEFF3F8),
-          foregroundColor: const Color(0xFF1E293B),
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          textStyle: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
       ),
     );
   }
