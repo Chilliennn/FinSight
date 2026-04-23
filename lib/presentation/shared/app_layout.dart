@@ -63,7 +63,6 @@ class AppLayout extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => const AppLayout(
               title: 'Upload Documents',
-              subtitle: 'Maju Bakery & Cafe Sdn Bhd . 16 Apr 2026',
               showAiStatus: true,
               child: UploadPage(
                 businessId: '680000000000000000000001',
@@ -184,7 +183,6 @@ class AppLayout extends StatelessWidget {
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
                   _forecastNavTile(context),
-                  _navTile(context, Icons.show_chart,   'Cash Flow Forecast'),
                   _riskAlertsNavTile(context),
                   _recommendationsNavTile(context),
                 ],
