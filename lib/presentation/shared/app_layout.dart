@@ -145,7 +145,7 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── _buildSidebar — Dashboard tile replaced, everything else unchanged ─────
+  // ── Sidebar ───────────────────────────────────────────────────────────────
   Widget _buildSidebar(BuildContext context) {
     return Container(
       color: const Color(0xFF0B1220),
