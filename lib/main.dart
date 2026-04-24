@@ -1,6 +1,5 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
+
 import 'presentation/shared/app_layout.dart';
 
 void main() {
@@ -26,7 +25,9 @@ class MyApp extends StatelessWidget {
           // title: 'Dashboard',
           // child: buildDashboardWithNav(context),
         ),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
       ),
+      home: const AppLayout(),
     );
   }
 }

@@ -111,8 +111,6 @@ class _UploadPageState extends State<UploadPage> {
         _uploadedDocument = uploaded;
         _isUploading = false;
       });
-      await _loadDocuments();
-      await _trackDocumentStatus(uploaded.id);
 
       CustomToast.show(
         context: context,
@@ -121,6 +119,9 @@ class _UploadPageState extends State<UploadPage> {
             '${file.name} uploaded. Processing has started in the background.',
         type: ToastType.success,
       );
+
+      await _loadDocuments();
+      await _trackDocumentStatus(uploaded.id);
     } catch (err) {
       if (!mounted) return;
       setState(() {
