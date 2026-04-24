@@ -18,13 +18,27 @@ class _LoginPageState extends State<LoginPage> {
   );
 
   final TextEditingController _businessIdController = TextEditingController();
+  final TextEditingController _businessNameController = TextEditingController();
+  final TextEditingController _industryController = TextEditingController();
+  final TextEditingController _currencyController = TextEditingController(
+    text: 'MYR',
+  );
+  final TextEditingController _safetyBufferController = TextEditingController();
   final http.Client _client = http.Client();
   bool _loading = false;
+  bool _createMode = false;
   String? _error;
+
+  static final RegExp _businessIdPattern = RegExp(r'^[a-zA-Z0-9_-]{3,64}$');
+  static final RegExp _currencyPattern = RegExp(r'^[A-Za-z]{3}$');
 
   @override
   void dispose() {
     _businessIdController.dispose();
+    _businessNameController.dispose();
+    _industryController.dispose();
+    _currencyController.dispose();
+    _safetyBufferController.dispose();
     _client.close();
     super.dispose();
   }
@@ -33,7 +47,16 @@ class _LoginPageState extends State<LoginPage> {
     final businessId = _businessIdController.text.trim();
     if (businessId.isEmpty) {
       setState(() {
-        _error = 'Enter your business ID.';
+        _error =
+            'Business ID is required. Expected 3-64 characters using letters, numbers, _ or -.';
+      });
+      return;
+    }
+
+    if (!_businessIdPattern.hasMatch(businessId)) {
+      setState(() {
+        _error =
+            'Business ID is invalid. Expected 3-64 characters using letters, numbers, _ or -.';
       });
       return;
     }
@@ -44,14 +67,83 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final response = await _client
-          .get(Uri.parse('$_baseUrl/api/businesses/$businessId'))
-          .timeout(const Duration(seconds: 20));
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if (response.statusCode != 200 || body['success'] != true) {
-        throw Exception(body['error'] ?? 'Business ID not found');
+      if (_createMode) {
+        final name = _businessNameController.text.trim();
+        final currency = _currencyController.text.trim();
+        if (name.isEmpty) {
+          throw Exception(
+            'Business Name is required. Expected a non-empty name.',
+          );
+        }
+        if (!_currencyPattern.hasMatch(currency)) {
+          throw Exception(
+            'Currency is invalid. Expected a 3-letter code such as MYR or SGD.',
+          );
+        }
+
+        final Map<String, dynamic> payload = {
+          '_id': businessId,
+          'name': name,
+          'industry': _industryController.text.trim(),
+          'currency': currency,
+        };
+
+        final bufferText = _safetyBufferController.text.trim();
+        if (bufferText.isNotEmpty) {
+          final safetyBuffer = num.tryParse(bufferText);
+          if (safetyBuffer == null || safetyBuffer < 0) {
+            throw Exception(
+              'Safety Buffer Threshold (RM) is invalid. Expected a number greater than or equal to 0.',
+            );
+          }
+          payload['safety_buffer_threshold'] = safetyBuffer;
+        }
+
+        final response = await _client
+            .post(
+              Uri.parse('$_baseUrl/api/businesses'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: jsonEncode(payload),
+            )
+            .timeout(const Duration(seconds: 20));
+        final body = _parseJsonObject(response.body);
+        if (response.statusCode != 201 || body['success'] != true) {
+          throw Exception(
+            _buildHttpErrorMessage(
+              response.statusCode,
+              response.body,
+              body['error']?.toString() ?? 'Unable to create account',
+            ),
+          );
+        }
+      } else {
+        final response = await _client
+            .get(Uri.parse('$_baseUrl/api/businesses/$businessId'))
+            .timeout(const Duration(seconds: 20));
+        final body = _parseJsonObject(response.body);
+        if (response.statusCode != 200 || body['success'] != true) {
+          throw Exception(
+            _buildHttpErrorMessage(
+              response.statusCode,
+              response.body,
+              body['error']?.toString() ?? 'Business ID not found',
+            ),
+          );
+        }
       }
+
       await widget.onLoginSuccess(businessId);
+    } on FormatException {
+      if (!mounted) return;
+      setState(() {
+        _error =
+            'Server response format error. Expected JSON from $_baseUrl, but received non-JSON content (for example HTML). Ensure backend API is running at $_baseUrl.';
+        _loading = false;
+      });
+      return;
     } catch (err) {
       if (!mounted) return;
       setState(() {
@@ -65,6 +157,29 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _loading = false;
     });
+  }
+
+  Map<String, dynamic> _parseJsonObject(String source) {
+    final decoded = jsonDecode(source);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    throw const FormatException('Expected JSON object');
+  }
+
+  String _buildHttpErrorMessage(
+    int statusCode,
+    String rawBody,
+    String defaultMessage,
+  ) {
+    final trimmed = rawBody.trimLeft();
+    if (trimmed.startsWith('<!DOCTYPE html') || trimmed.startsWith('<html')) {
+      return 'Server returned HTML instead of JSON (HTTP $statusCode). Ensure backend API is running at $_baseUrl and endpoint /api/businesses is reachable.';
+    }
+    if (statusCode == 409) {
+      return 'Business ID already exists. Please use a different Business ID (3-64 chars, letters/numbers/_/-).';
+    }
+    return defaultMessage;
   }
 
   @override
@@ -100,7 +215,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'Business Login',
+                  'FinSight',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 26,
@@ -109,8 +224,10 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Enter your Business ID to continue.',
+                Text(
+                  _createMode
+                      ? 'Sign up to continue'
+                      : 'Enter your Business ID to continue.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
                 ),
@@ -127,6 +244,41 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
+                if (_createMode) ...[
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _businessNameController,
+                    decoration: InputDecoration(
+                      labelText: 'Business Name',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _industryController,
+                    decoration: InputDecoration(
+                      labelText: 'Industry',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _safetyBufferController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Safety Buffer Threshold (RM)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -158,8 +310,20 @@ class _LoginPageState extends State<LoginPage> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Continue'),
+                        : Text(_createMode ? 'Create Account' : 'Continue'),
                   ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          setState(() {
+                            _error = null;
+                            _createMode = !_createMode;
+                          });
+                        },
+                  child: Text(_createMode ? 'Back to Login' : 'Create Account'),
                 ),
               ],
             ),

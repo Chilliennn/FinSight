@@ -384,8 +384,6 @@ class _RisksPageState extends State<RisksPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _pageHeader(data.businessName, triggeredOn),
-                const SizedBox(height: 24),
                 const Text(
                   'Risk Alerts',
                   style: TextStyle(
@@ -414,64 +412,6 @@ class _RisksPageState extends State<RisksPage> {
           ),
         );
       },
-    );
-  }
-
-  /* ------------------------- PAGE HEADER ------------------------- */
-
-  Widget _pageHeader(String businessName, DateTime date) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Risk Alerts',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '$businessName · ${_fmtDate(date)}',
-                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFFECFDF5),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: const Color(0xFFA7F3D0)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              _Dot(color: Color(0xFF10B981), size: 8),
-              SizedBox(width: 8),
-              Text(
-                'AI Active',
-                style: TextStyle(
-                  color: Color(0xFF047857),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        IconButton(
-          onPressed: _reDetect,
-          tooltip: 'Re-run detection',
-          icon: const Icon(Icons.refresh_rounded, color: Color(0xFF64748B)),
-        ),
-      ],
     );
   }
 
