@@ -41,7 +41,9 @@ class _AppLayoutState extends State<AppLayout> {
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
         final businessId = prefs.getString('business_id');
-        _businessId = (businessId == null || businessId.isEmpty) ? null : businessId;
+        _businessId = (businessId == null || businessId.isEmpty)
+            ? null
+            : businessId;
       } else {
         final home = Platform.environment['HOME'] ?? '.';
         final file = File('$home/.finsight_business_id');
@@ -120,6 +122,7 @@ class _AppLayoutState extends State<AppLayout> {
         return RisksPage(
           businessId: businessId,
           api: RisksApi.http(baseUrl: _apiBaseUrl),
+          onGoToRecommendations: () => _setSection(_AppSection.recommendations),
         );
       case _AppSection.recommendations:
         return RecommendationPage(businessId: businessId);
