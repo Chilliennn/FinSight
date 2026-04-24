@@ -1,15 +1,14 @@
 import 'dart:io';
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';
 import '../actions/recommendation_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../login/login_page.dart';
-import 'settings_page.dart';
 
-enum _AppSection { dashboard, upload, risks, recommendations, settings, logout }
+enum _AppSection { dashboard, upload, risks, recommendations }
 
 class AppLayout extends StatefulWidget {
   final _AppSection initialSection;
@@ -28,13 +27,7 @@ class _AppLayoutState extends State<AppLayout> {
 
   late _AppSection _currentSection;
   String? _businessId;
-  Map<String, dynamic>? _business;
   bool _loadingSession = true;
-
-  File get _sessionFile {
-    final home = Platform.environment['HOME'] ?? '.';
-    return File('$home/.finsight_business_id');
-  }
 
   @override
   void initState() {
@@ -45,11 +38,16 @@ class _AppLayoutState extends State<AppLayout> {
 
   Future<void> _loadBusinessId() async {
     try {
-      if (await _sessionFile.exists()) {
-        final businessId = (await _sessionFile.readAsString()).trim();
-        _businessId = businessId.isEmpty ? null : businessId;
-        if (_businessId != null) {
-          await _loadBusinessDetails(_businessId!);
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        final businessId = prefs.getString('business_id');
+        _businessId = (businessId == null || businessId.isEmpty) ? null : businessId;
+      } else {
+        final home = Platform.environment['HOME'] ?? '.';
+        final file = File('$home/.finsight_business_id');
+        if (await file.exists()) {
+          final businessId = (await file.readAsString()).trim();
+          _businessId = businessId.isEmpty ? null : businessId;
         }
       }
     } finally {
@@ -61,60 +59,19 @@ class _AppLayoutState extends State<AppLayout> {
   }
 
   Future<void> _saveBusinessId(String businessId) async {
-    await _sessionFile.writeAsString(businessId);
-    await _loadBusinessDetails(businessId);
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('business_id', businessId);
+    } else {
+      final home = Platform.environment['HOME'] ?? '.';
+      final file = File('$home/.finsight_business_id');
+      await file.writeAsString(businessId);
+    }
     if (!mounted) return;
     setState(() {
       _businessId = businessId;
       _currentSection = _AppSection.dashboard;
     });
-  }
-
-  Future<void> _loadBusinessDetails(String businessId) async {
-    try {
-      final response = await http
-          .get(Uri.parse('$_apiBaseUrl/api/businesses/$businessId'))
-          .timeout(const Duration(seconds: 20));
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if (response.statusCode == 200 && body['success'] == true) {
-        _business =
-            (body['data'] as Map<String, dynamic>)['business']
-                as Map<String, dynamic>;
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _logout() async {
-    try {
-      if (await _sessionFile.exists()) {
-        await _sessionFile.delete();
-      }
-    } catch (_) {}
-
-    if (!mounted) return;
-    setState(() {
-      _businessId = null;
-      _business = null;
-      _currentSection = _AppSection.dashboard;
-    });
-  }
-
-  String _formatDate(DateTime d) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
 
   void _setSection(_AppSection section, {bool closeDrawer = false}) {
@@ -133,31 +90,15 @@ class _AppLayoutState extends State<AppLayout> {
   }
 
   ({String title, String? subtitle, bool showAiStatus}) _pageMeta() {
-    final businessName = (_business?['name'] ?? 'Business').toString();
-    final today = _formatDate(DateTime.now());
-    final subtitle = '$businessName · $today';
-
     switch (_currentSection) {
       case _AppSection.dashboard:
-        return (title: 'Dashboard', subtitle: subtitle, showAiStatus: false);
+        return (title: 'Dashboard', subtitle: null, showAiStatus: false);
       case _AppSection.upload:
-        return (
-          title: 'Upload Documents',
-          subtitle: subtitle,
-          showAiStatus: true,
-        );
+        return (title: 'Upload Documents', subtitle: null, showAiStatus: true);
       case _AppSection.risks:
-        return (title: 'Risk Alerts', subtitle: subtitle, showAiStatus: false);
+        return (title: 'Risk Alerts', subtitle: null, showAiStatus: false);
       case _AppSection.recommendations:
-        return (
-          title: 'Recommendations',
-          subtitle: subtitle,
-          showAiStatus: false,
-        );
-      case _AppSection.settings:
-        return (title: 'Settings', subtitle: subtitle, showAiStatus: false);
-      case _AppSection.logout:
-        return (title: 'Logout', subtitle: subtitle, showAiStatus: false);
+        return (title: 'Recommendations', subtitle: null, showAiStatus: false);
     }
   }
 
@@ -174,10 +115,7 @@ class _AppLayoutState extends State<AppLayout> {
           onGoToRisks: () => _setSection(_AppSection.risks),
         );
       case _AppSection.upload:
-        return UploadPage(
-          businessId: businessId,
-          businessName: (_business?['name'] ?? '').toString(),
-        );
+        return const UploadPage(businessId: '', businessName: '');
       case _AppSection.risks:
         return RisksPage(
           businessId: businessId,
@@ -185,21 +123,6 @@ class _AppLayoutState extends State<AppLayout> {
         );
       case _AppSection.recommendations:
         return RecommendationPage(businessId: businessId);
-      case _AppSection.settings:
-        return SettingsPage(
-          apiBaseUrl: _apiBaseUrl,
-          businessId: businessId,
-          initialBusiness: _business,
-          onBusinessUpdated: (business) {
-            if (!mounted) return;
-            setState(() {
-              _business = business;
-            });
-          },
-          onConfirmLogout: _logout,
-        );
-      case _AppSection.logout:
-        return const SizedBox.shrink();
     }
   }
 
@@ -330,8 +253,35 @@ class _AppLayoutState extends State<AppLayout> {
     final subtitle = meta.subtitle;
     final showAiStatus = meta.showAiStatus;
 
+    if (subtitle == null && !showAiStatus) {
+      return Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: const BoxDecoration(color: Colors.white),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const Icon(Icons.notifications_none),
+            const SizedBox(width: 12),
+            CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: const Text('MJ'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      height: 102,
+      height: subtitle == null ? 64 : 102,
       padding: const EdgeInsets.symmetric(horizontal: 32),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -417,17 +367,14 @@ class _AppLayoutState extends State<AppLayout> {
             ],
           ),
           const SizedBox(width: 24),
-          GestureDetector(
-            onTap: () => _setSection(_AppSection.settings),
-            child: const CircleAvatar(
-              radius: 25,
-              backgroundColor: Color(0xFF4F46E5),
-              child: Text(
-                'MJ',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+          const CircleAvatar(
+            radius: 25,
+            backgroundColor: Color(0xFF4F46E5),
+            child: Text(
+              'MJ',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
