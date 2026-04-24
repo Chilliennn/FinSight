@@ -1,0 +1,704 @@
+// lib/presentation/forecast/forecast_page.dart
+//
+// Cash Flow Forecast Display
+// - Top KPI cards
+// - Combined bar + line chart
+// - Detailed 8-week forecast table
+
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+
+class ForecastContent extends StatefulWidget {
+  final VoidCallback? onGoToDashboard;
+
+  const ForecastContent({
+    super.key,
+    this.onGoToDashboard,
+  });
+
+  @override
+  State<ForecastContent> createState() => _ForecastContentState();
+}
+
+class _ForecastContentState extends State<ForecastContent> {
+  bool _isLoading = true;
+  Map<String, dynamic> _forecastData = {};
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadForecastData();
+  }
+
+  Future<void> _loadForecastData() async {
+    try {
+      setState(() => _isLoading = true);
+
+      // TODO: Replace mock with backend API call.
+      await Future.delayed(const Duration(milliseconds: 450));
+
+      setState(() {
+        _forecastData = _generateMockForecastData();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _generateMockForecastData() {
+    final weekly = <Map<String, dynamic>>[
+      {
+        'week': 1,
+        'period': '21 Apr',
+        'total_inflow': 11000,
+        'total_outflow': 9500,
+        'net_flow': 1500,
+        'end_of_week_balance': 29950,
+      },
+      {
+        'week': 2,
+        'period': '28 Apr',
+        'total_inflow': 10500,
+        'total_outflow': 9000,
+        'net_flow': 1500,
+        'end_of_week_balance': 31450,
+      },
+      {
+        'week': 3,
+        'period': '5 May',
+        'total_inflow': 10000,
+        'total_outflow': 12000,
+        'net_flow': -2000,
+        'end_of_week_balance': 29450,
+      },
+      {
+        'week': 4,
+        'period': '12 May',
+        'total_inflow': 9500,
+        'total_outflow': 12500,
+        'net_flow': -3000,
+        'end_of_week_balance': 26450,
+      },
+      {
+        'week': 5,
+        'period': '19 May',
+        'total_inflow': 9000,
+        'total_outflow': 15500,
+        'net_flow': -6500,
+        'end_of_week_balance': 19950,
+      },
+      {
+        'week': 6,
+        'period': '26 May',
+        'total_inflow': 8500,
+        'total_outflow': 22500,
+        'net_flow': -14000,
+        'end_of_week_balance': -2550,
+      },
+      {
+        'week': 7,
+        'period': '2 Jun',
+        'total_inflow': 9000,
+        'total_outflow': 14500,
+        'net_flow': -5500,
+        'end_of_week_balance': -8050,
+      },
+      {
+        'week': 8,
+        'period': '9 Jun',
+        'total_inflow': 10500,
+        'total_outflow': 8000,
+        'net_flow': 2500,
+        'end_of_week_balance': -4050,
+      },
+    ];
+
+    final minBal = weekly
+        .map((w) => w['end_of_week_balance'] as int)
+        .reduce((a, b) => math.min(a, b));
+
+    final avgIn = (weekly.fold<int>(0, (s, w) => s + (w['total_inflow'] as int)) /
+            weekly.length)
+        .round();
+
+    final avgOut = (weekly.fold<int>(0, (s, w) => s + (w['total_outflow'] as int)) /
+            weekly.length)
+        .round();
+
+    return {
+      'business_id': 'BUSINESS_001',
+      'current_balance': 28450,
+      'generated_at': DateTime.now().toIso8601String(),
+      'weekly_totals': weekly,
+      'risk_summary': {
+        'risk_level': 'High',
+        'minimum_projected_balance': minBal,
+        'projected_shortfall_date': '26 May 2026',
+      },
+      'kpis': {
+        'avg_weekly_inflow': avgIn,
+        'avg_weekly_outflow': avgOut,
+      },
+      'cash_gap_note':
+          'Cash gap detected at week of 26 May: projected balance of -RM 2,550. Major outflows: salaries, rent and annual supplier payment.',
+      'ai_insights': {
+        'summary':
+            'Following the top recommendations (collect invoices, defer supplier payment, reduce marketing) can remove the projected gap and improve cash balance.',
+        'warnings': [
+          'Week 6 to Week 8 show negative ending balances without intervention.',
+        ],
+        'opportunities': [
+          'Accelerate receivables collection in Week 4 and Week 5.',
+          'Move non-critical spending out of Week 6.',
+        ],
+      },
+    };
+  }
+
+  String _rm(num value, {bool withSign = false}) {
+    final abs = value.abs().toStringAsFixed(0);
+    if (withSign) {
+      final sign = value >= 0 ? '+' : '-';
+      return '${sign}RM $abs';
+    }
+    return 'RM $abs';
+  }
+
+  List<Map<String, dynamic>> _weeklyTotals() {
+    return (_forecastData['weekly_totals'] as List<dynamic>).cast<Map<String, dynamic>>();
+  }
+
+  Widget _cardShell({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A0F172A),
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+            const SizedBox(height: 12),
+            Text('Failed to load forecast', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 6),
+            Text(_errorMessage!),
+            const SizedBox(height: 20),
+            ElevatedButton(onPressed: _loadForecastData, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Cash Flow Forecast',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF0F172A),
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '8-week projection based on historical patterns',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF64748B),
+                        ),
+                  ),
+                ],
+              ),
+              OutlinedButton.icon(
+                onPressed: _loadForecastData,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Refresh'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // 1) Top 4 KPI components.
+          _buildTopKpiRow(),
+          const SizedBox(height: 18),
+
+          // 2) Combined bar + line graph.
+          _buildCombinedGraphCard(),
+          const SizedBox(height: 18),
+
+          // 3) Detailed forecast below graph.
+          _buildDetailedForecastCard(),
+          const SizedBox(height: 18),
+
+          _buildRecommendationBanner(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopKpiRow() {
+    final kpi = _forecastData['kpis'] as Map<String, dynamic>;
+    final currentBalance = (_forecastData['current_balance'] ?? 0) as int;
+    final minBalance = (_forecastData['risk_summary']['minimum_projected_balance'] ?? 0) as int;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cards = [
+          _kpiCard(
+            title: 'Current Balance',
+            value: _rm(currentBalance),
+            subtitle: 'As of today',
+            icon: Icons.account_balance_wallet_outlined,
+            tint: const Color(0xFF2563EB),
+            border: const Color(0xFFE2E8F0),
+          ),
+          _kpiCard(
+            title: 'Avg Weekly Inflow',
+            value: _rm(kpi['avg_weekly_inflow'] as int),
+            subtitle: '8-week historical avg',
+            icon: Icons.trending_up,
+            tint: const Color(0xFF059669),
+            border: const Color(0xFFA7F3D0),
+          ),
+          _kpiCard(
+            title: 'Avg Weekly Outflow',
+            value: _rm(kpi['avg_weekly_outflow'] as int),
+            subtitle: '8-week historical avg',
+            icon: Icons.trending_down,
+            tint: const Color(0xFFDC2626),
+            border: const Color(0xFFFECACA),
+          ),
+          _kpiCard(
+            title: 'Projected Min Balance',
+            value: _rm(minBalance, withSign: minBalance < 0),
+            subtitle: 'Week with lowest balance',
+            icon: Icons.warning_amber_rounded,
+            tint: const Color(0xFFDC2626),
+            border: const Color(0xFFFECACA),
+          ),
+        ];
+
+        if (constraints.maxWidth >= 980) {
+          return Row(
+            children: [
+              for (int i = 0; i < cards.length; i++) ...[
+                Expanded(child: cards[i]),
+                if (i < cards.length - 1) const SizedBox(width: 12),
+              ],
+            ],
+          );
+        }
+
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(child: cards[0]),
+                const SizedBox(width: 12),
+                Expanded(child: cards[1]),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(child: cards[2]),
+                const SizedBox(width: 12),
+                Expanded(child: cards[3]),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _kpiCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    required Color tint,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 19, color: tint),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: TextStyle(
+              color: tint,
+              fontWeight: FontWeight.w800,
+              fontSize: 28,
+              height: 1.0,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCombinedGraphCard() {
+    final weekly = _weeklyTotals();
+
+    return _cardShell(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Weekly Inflow vs Outflow + Balance Trend',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Bars represent inflow and outflow, line represents projected balance',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF64748B),
+                  ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 300,
+              child: CustomPaint(
+                painter: _CombinedForecastPainter(weekly: weekly),
+                child: const SizedBox.expand(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: [
+                _legendBox('Inflow', const Color(0xFF34D399)),
+                _legendBox('Outflow', const Color(0xFFF87171)),
+                _legendLine('Balance', const Color(0xFF2563EB)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFCA5A5)),
+              ),
+              child: Text(
+                _forecastData['cash_gap_note'] as String,
+                style: const TextStyle(
+                  color: Color(0xFFB91C1C),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _legendBox(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _legendLine(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 24, height: 2, color: color),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _buildDetailedForecastCard() {
+    final weekly = _weeklyTotals();
+
+    return _cardShell(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '8-Week Detailed Forecast',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Weekly inflow, outflow, net and projected balance breakdown',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: const Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowHeight: 44,
+                dataRowMinHeight: 46,
+                dataRowMaxHeight: 56,
+                headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
+                columnSpacing: 24,
+                columns: const [
+                  DataColumn(label: Text('Week')),
+                  DataColumn(label: Text('Period')),
+                  DataColumn(label: Text('Projected Inflow')),
+                  DataColumn(label: Text('Projected Outflow')),
+                  DataColumn(label: Text('Net')),
+                  DataColumn(label: Text('Projected Balance')),
+                  DataColumn(label: Text('Status')),
+                ],
+                rows: weekly.map((w) {
+                  final inflow = w['total_inflow'] as int;
+                  final outflow = w['total_outflow'] as int;
+                  final net = w['net_flow'] as int;
+                  final bal = w['end_of_week_balance'] as int;
+                  final isGap = bal < 0;
+
+                  return DataRow(
+                    color: isGap
+                        ? const WidgetStatePropertyAll(Color(0xFFFEF2F2))
+                        : null,
+                    cells: [
+                      DataCell(Text('Week ${w['week']}')),
+                      DataCell(Text(w['period'] as String)),
+                      DataCell(Text(_rm(inflow, withSign: true), style: const TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.w700))),
+                      DataCell(Text(_rm(outflow, withSign: true).replaceFirst('+', '-'), style: const TextStyle(color: Color(0xFFDC2626), fontWeight: FontWeight.w700))),
+                      DataCell(Text(_rm(net, withSign: true), style: TextStyle(color: net >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626), fontWeight: FontWeight.w700))),
+                      DataCell(Text(_rm(bal, withSign: isGap), style: TextStyle(color: isGap ? const Color(0xFFDC2626) : const Color(0xFF0F172A), fontWeight: FontWeight.w800))),
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isGap ? const Color(0xFFFEF2F2) : const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            isGap ? 'CASH GAP' : 'SAFE',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: isGap ? const Color(0xFFDC2626) : const Color(0xFF047857),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationBanner() {
+    final summary = (_forecastData['ai_insights']['summary'] ?? '') as String;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF86EFAC)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.tips_and_updates_outlined, color: Color(0xFF166534)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              summary,
+              style: const TextStyle(color: Color(0xFF166534), fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {},
+            child: const Text('Show Impact'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CombinedForecastPainter extends CustomPainter {
+  final List<Map<String, dynamic>> weekly;
+
+  _CombinedForecastPainter({required this.weekly});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (weekly.isEmpty) return;
+
+    const topPad = 10.0;
+    const bottomPad = 14.0;
+    final usableHeight = size.height - topPad - bottomPad;
+    final groupW = size.width / weekly.length;
+    final barW = groupW * 0.30;
+
+    final maxVal = weekly
+        .map((w) => [
+              (w['total_inflow'] as int).toDouble(),
+              (w['total_outflow'] as int).toDouble(),
+              (w['end_of_week_balance'] as int).abs().toDouble(),
+            ])
+        .expand((v) => v)
+        .reduce(math.max)
+        .clamp(1, double.infinity);
+
+    final inflowPaint = Paint()..color = const Color(0xFF34D399);
+    final outflowPaint = Paint()..color = const Color(0xFFF87171);
+    final linePaint = Paint()
+      ..color = const Color(0xFF2563EB)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE2E8F0)
+      ..strokeWidth = 1;
+
+    for (int i = 1; i <= 4; i++) {
+      final y = topPad + (usableHeight * i / 4);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final linePts = <Offset>[];
+
+    for (int i = 0; i < weekly.length; i++) {
+      final row = weekly[i];
+      final inflow = (row['total_inflow'] as int).toDouble();
+      final outflow = (row['total_outflow'] as int).toDouble();
+      final balance = (row['end_of_week_balance'] as int).toDouble();
+
+      final xCenter = (groupW * i) + (groupW / 2);
+
+      final inflowH = (inflow / maxVal) * usableHeight;
+      final outflowH = (outflow / maxVal) * usableHeight;
+      final balanceH = (balance.abs() / maxVal) * usableHeight;
+      final balanceY = topPad + usableHeight - balanceH;
+
+      final inflowRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          xCenter - barW - 2,
+          topPad + usableHeight - inflowH,
+          barW,
+          inflowH,
+        ),
+        const Radius.circular(4),
+      );
+
+      final outflowRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          xCenter + 2,
+          topPad + usableHeight - outflowH,
+          barW,
+          outflowH,
+        ),
+        const Radius.circular(4),
+      );
+
+      canvas.drawRRect(inflowRect, inflowPaint);
+      canvas.drawRRect(outflowRect, outflowPaint);
+
+      linePts.add(Offset(xCenter, balanceY));
+    }
+
+    for (int i = 0; i < linePts.length - 1; i++) {
+      canvas.drawLine(linePts[i], linePts[i + 1], linePaint);
+    }
+
+    final pointPaint = Paint()..color = const Color(0xFF2563EB);
+    for (final p in linePts) {
+      canvas.drawCircle(p, 3.2, pointPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CombinedForecastPainter oldDelegate) {
+    return oldDelegate.weekly != weekly;
+  }
+}

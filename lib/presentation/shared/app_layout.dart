@@ -1,55 +1,156 @@
-// lib/presentation/shared/app_layout.dart
-//
-// Changes from previous version:
-//   1. Added _dashboardNavTile() — navigates back to dashboard root.
-//   2. DashboardContent receives onGoToRecommendations + onGoToRisks callbacks.
-//   3. RecommendationPage now receives businessType and currentBalance
-//      (required by the updated page that triggers Z.AI generation).
-
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import '../upload/upload_page.dart';
 import '../risks/risks_page.dart';
 import '../actions/recommendation_page.dart';
 import '../dashboard/dashboard_page.dart';
+import '../login/login_page.dart';
 
-class AppLayout extends StatelessWidget {
-  final Widget child;
-  final String title;
-  final String? subtitle;
-  final bool showAiStatus;
+enum _AppSection { dashboard, upload, risks, recommendations }
 
-  const AppLayout({
-    super.key,
-    required this.child,
-    this.title = 'FinSight',
-    this.subtitle,
-    this.showAiStatus = false,
-  });
+class AppLayout extends StatefulWidget {
+  final _AppSection initialSection;
 
-  // ── Generic nav tile (SnackBar placeholder) ───────────────────────────────
+  const AppLayout({super.key, this.initialSection = _AppSection.dashboard});
+
+  @override
+  State<AppLayout> createState() => _AppLayoutState();
+}
+
+class _AppLayoutState extends State<AppLayout> {
+  static const String _apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000',
+  );
+
+  late _AppSection _currentSection;
+  String? _businessId;
+  bool _loadingSession = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentSection = widget.initialSection;
+    _loadBusinessId();
+  }
+
+  Future<void> _loadBusinessId() async {
+    try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        final businessId = prefs.getString('business_id');
+        _businessId = (businessId == null || businessId.isEmpty) ? null : businessId;
+      } else {
+        final home = Platform.environment['HOME'] ?? '.';
+        final file = File('$home/.finsight_business_id');
+        if (await file.exists()) {
+          final businessId = (await file.readAsString()).trim();
+          _businessId = businessId.isEmpty ? null : businessId;
+        }
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loadingSession = false;
+      });
+    }
+  }
+
+  Future<void> _saveBusinessId(String businessId) async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('business_id', businessId);
+    } else {
+      final home = Platform.environment['HOME'] ?? '.';
+      final file = File('$home/.finsight_business_id');
+      await file.writeAsString(businessId);
+    }
+    if (!mounted) return;
+    setState(() {
+      _businessId = businessId;
+      _currentSection = _AppSection.dashboard;
+    });
+  }
+
+  void _setSection(_AppSection section, {bool closeDrawer = false}) {
+    if (_currentSection == section) {
+      if (closeDrawer && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+    setState(() {
+      _currentSection = section;
+    });
+    if (closeDrawer && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  ({String title, String? subtitle, bool showAiStatus}) _pageMeta() {
+    switch (_currentSection) {
+      case _AppSection.dashboard:
+        return (title: 'Dashboard', subtitle: null, showAiStatus: false);
+      case _AppSection.upload:
+        return (title: 'Upload Documents', subtitle: null, showAiStatus: true);
+      case _AppSection.risks:
+        return (title: 'Risk Alerts', subtitle: null, showAiStatus: false);
+      case _AppSection.recommendations:
+        return (title: 'Recommendations', subtitle: null, showAiStatus: false);
+    }
+  }
+
+  Widget _buildCurrentPage() {
+    final businessId = _businessId;
+    if (businessId == null) {
+      return const SizedBox.shrink();
+    }
+
+    switch (_currentSection) {
+      case _AppSection.dashboard:
+        return DashboardContent(
+          onGoToRecommendations: () => _setSection(_AppSection.recommendations),
+          onGoToRisks: () => _setSection(_AppSection.risks),
+        );
+      case _AppSection.upload:
+        return const UploadPage(businessId: '', businessName: '');
+      case _AppSection.risks:
+        return RisksPage(
+          businessId: businessId,
+          api: RisksApi.http(baseUrl: _apiBaseUrl),
+        );
+      case _AppSection.recommendations:
+        return RecommendationPage(businessId: businessId);
+    }
+  }
+
   Widget _navTile(BuildContext context, IconData icon, String label) {
     return ListTile(
       leading: Icon(icon, color: Colors.white70),
       title: Text(label, style: const TextStyle(color: Colors.white70)),
       onTap: () {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$label tapped')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$label tapped')));
       },
     );
   }
 
-  // ── Dashboard nav tile ────────────────────────────────────────────────────
   Widget _dashboardNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.dashboard, color: Colors.white70),
       title: const Text('Dashboard', style: TextStyle(color: Colors.white70)),
       onTap: () {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        _setSection(
+          _AppSection.dashboard,
+          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
+        );
       },
     );
   }
 
-  // ── Upload nav tile ───────────────────────────────────────────────────────
   Widget _uploadNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.upload_file, color: Colors.white70),
@@ -58,41 +159,27 @@ class AppLayout extends StatelessWidget {
         style: TextStyle(color: Colors.white70),
       ),
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const AppLayout(
-              title: 'Upload Documents',
-              showAiStatus: true,
-              child: UploadPage(),
-            ),
-          ),
+        _setSection(
+          _AppSection.upload,
+          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
         );
       },
     );
   }
 
-  // ── Risk Alerts nav tile ──────────────────────────────────────────────────
   Widget _riskAlertsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.warning_amber_outlined, color: Colors.white70),
       title: const Text('Risk Alerts', style: TextStyle(color: Colors.white70)),
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => AppLayout(
-              title: 'Risk Alerts',
-              child: RisksPage(
-                businessId: 'maju-bakery-demo',
-                api: RisksApi.http(baseUrl: 'http://localhost:3000'),
-              ),
-            ),
-          ),
+        _setSection(
+          _AppSection.risks,
+          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
         );
       },
     );
   }
 
-  // ── Recommendations nav tile ──────────────────────────────────────────────
   Widget _recommendationsNavTile(BuildContext context) {
     return ListTile(
       leading: const Icon(Icons.lightbulb_outline, color: Colors.white70),
@@ -101,25 +188,14 @@ class AppLayout extends StatelessWidget {
         style: TextStyle(color: Colors.white70),
       ),
       onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const AppLayout(
-              title: 'Recommendations',
-              child: RecommendationPage(
-                businessId:     'biz_maju_001',
-                businessName:   'Maju Bakery & Cafe',
-                businessType:   'F&B / Retail Bakery',
-                riskId:         'demo-risk-cashgap-001',
-                currentBalance: 18500,
-              ),
-            ),
-          ),
+        _setSection(
+          _AppSection.recommendations,
+          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
         );
       },
     );
   }
 
-  // ── Sidebar ───────────────────────────────────────────────────────────────
   Widget _buildSidebar(BuildContext context) {
     return Container(
       color: const Color(0xFF0B1220),
@@ -152,7 +228,7 @@ class AppLayout extends StatelessWidget {
                   _dashboardNavTile(context),
                   _uploadNavTile(context),
                   _navTile(context, Icons.receipt_long, 'Transactions'),
-                  _navTile(context, Icons.show_chart,   'Cash Flow Forecast'),
+                  _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
                   _riskAlertsNavTile(context),
                   _recommendationsNavTile(context),
                 ],
@@ -161,8 +237,8 @@ class AppLayout extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12.0),
               child: RiskAlertsSidebarBadge(
-                businessId: 'maju-bakery-demo',
-                api: RisksApi.http(baseUrl: 'http://localhost:3000'),
+                businessId: _businessId!,
+                api: RisksApi.http(baseUrl: _apiBaseUrl),
               ),
             ),
           ],
@@ -171,8 +247,12 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── Top bar ───────────────────────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context) {
+    final meta = _pageMeta();
+    final title = meta.title;
+    final subtitle = meta.subtitle;
+    final showAiStatus = meta.showAiStatus;
+
     if (subtitle == null && !showAiStatus) {
       return Container(
         height: 64,
@@ -225,7 +305,7 @@ class AppLayout extends StatelessWidget {
                 if (subtitle != null) ...[
                   const SizedBox(height: 5),
                   Text(
-                    subtitle!,
+                    subtitle,
                     style: const TextStyle(
                       color: Color(0xFF74819A),
                       fontSize: 15,
@@ -303,9 +383,22 @@ class AppLayout extends StatelessWidget {
     );
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    if (_loadingSession) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_businessId == null) {
+      return LoginPage(onLoginSuccess: _saveBusinessId);
+    }
+
+    final meta = _pageMeta();
+    final title = meta.title;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final bool narrow = constraints.maxWidth < 800;
@@ -314,7 +407,7 @@ class AppLayout extends StatelessWidget {
             backgroundColor: Colors.white,
             appBar: AppBar(title: Text(title)),
             drawer: Drawer(child: _buildSidebar(context)),
-            body: child,
+            body: _buildCurrentPage(),
           );
         }
 
@@ -327,7 +420,7 @@ class AppLayout extends StatelessWidget {
                 child: Column(
                   children: [
                     _buildTopBar(context),
-                    Expanded(child: child),
+                    Expanded(child: _buildCurrentPage()),
                   ],
                 ),
               ),
@@ -337,42 +430,4 @@ class AppLayout extends StatelessWidget {
       },
     );
   }
-}
-
-// ── buildDashboardWithNav ─────────────────────────────────────────────────────
-// Call from main.dart as the initial route body.
-// Passes navigation callbacks to DashboardContent without creating a circular
-// dependency between dashboard_page.dart and app_layout.dart.
-Widget buildDashboardWithNav(BuildContext context) {
-  return DashboardContent(
-    onGoToRecommendations: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const AppLayout(
-            title: 'Recommendations',
-            child: RecommendationPage(
-              businessId:     'biz_maju_001',
-              businessName:   'Maju Bakery & Cafe',
-              businessType:   'F&B / Retail Bakery',
-              riskId:         'demo-risk-cashgap-001',
-              currentBalance: 18500,
-            ),
-          ),
-        ),
-      );
-    },
-    onGoToRisks: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => AppLayout(
-            title: 'Risk Alerts',
-            child: RisksPage(
-              businessId: 'maju-bakery-demo',
-              api: RisksApi.http(baseUrl: 'http://localhost:3000'),
-            ),
-          ),
-        ),
-      );
-    },
-  );
 }
