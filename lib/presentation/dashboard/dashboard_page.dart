@@ -251,39 +251,20 @@ class DashboardContent extends StatelessWidget {
                 ],
               );
 
-        const topCardHeight    = 500.0;
-        const sideCardWidth    = 332.0;
+        const topCardHeight = 500.0;
+        const sideCardWidth = 332.0;
         const bottomCardHeight = 420.0;
 
         return SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
-            horizontalPadding, 18, horizontalPadding, 24,
+            horizontalPadding,
+            18,
+            horizontalPadding,
+            24,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Dashboard',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      '16 Apr 2026',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-
               // ── Critical alert banner ─────────────────────────────────────
               _cardShell(
                 child: Container(
@@ -301,7 +282,8 @@ class DashboardContent extends StatelessWidget {
                   child: Row(
                     children: [
                       Container(
-                        width: 38, height: 38,
+                        width: 38,
+                        height: 38,
                         decoration: BoxDecoration(
                           color: const Color(0xFFEF4444),
                           borderRadius: BorderRadius.circular(12),
@@ -343,7 +325,8 @@ class DashboardContent extends StatelessWidget {
                           backgroundColor: const Color(0xFFEF4444),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 18, vertical: 14,
+                            horizontal: 18,
+                            vertical: 14,
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -369,8 +352,8 @@ class DashboardContent extends StatelessWidget {
                 const SizedBox(height: 14),
                 _RiskCard(
                   cardShell: _cardShell,
-                  riskTile:  _riskTile,
-                  onViewAll: onGoToRisks,           // ← wired
+                  riskTile: _riskTile,
+                  onViewAll: onGoToRisks, // ← wired
                 ),
                 const SizedBox(height: 14),
                 _TransactionsCard(cardShell: _cardShell),
@@ -391,8 +374,8 @@ class DashboardContent extends StatelessWidget {
                       height: topCardHeight,
                       child: _RiskCard(
                         cardShell: _cardShell,
-                        riskTile:  _riskTile,
-                        onViewAll: onGoToRisks,     // ← wired
+                        riskTile: _riskTile,
+                        onViewAll: onGoToRisks, // ← wired
                       ),
                     ),
                   ],
@@ -511,7 +494,8 @@ class _RiskCard extends StatelessWidget {
     required String subtitle,
     required Color accent,
     required Color background,
-  }) riskTile;
+  })
+  riskTile;
   final VoidCallback? onViewAll; // ← NEW
 
   const _RiskCard({
@@ -596,10 +580,7 @@ class _RecommendationsCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
   final VoidCallback? onViewAll; // ← NEW
 
-  const _RecommendationsCard({
-    required this.cardShell,
-    this.onViewAll,
-  });
+  const _RecommendationsCard({required this.cardShell, this.onViewAll});
 
   @override
   Widget build(BuildContext context) {
@@ -797,13 +778,18 @@ class _LegendDot extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 10, height: 3,
+          width: 10,
+          height: 3,
           decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(999),
+            color: color,
+            borderRadius: BorderRadius.circular(999),
           ),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+        ),
       ],
     );
   }
@@ -813,14 +799,19 @@ class _TrendChart extends StatelessWidget {
   const _TrendChart();
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: _TrendChartPainter(), child: const SizedBox.expand());
+    return CustomPaint(
+      painter: _TrendChartPainter(),
+      child: const SizedBox.expand(),
+    );
   }
 }
 
 class _TrendChartPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final paintGrid = Paint()..color = const Color(0xFFF1F5F9)..strokeWidth = 1;
+    final paintGrid = Paint()
+      ..color = const Color(0xFFF1F5F9)
+      ..strokeWidth = 1;
     final paintHistorical = Paint()
       ..color = const Color(0xFF3B82F6)
       ..style = PaintingStyle.stroke
@@ -829,7 +820,8 @@ class _TrendChartPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     final paintHistoricalFill = Paint()
       ..shader = LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
         colors: [
           const Color(0xFF3B82F6).withValues(alpha: 0.18),
           const Color(0xFF3B82F6).withValues(alpha: 0.02),
@@ -840,18 +832,31 @@ class _TrendChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
-    final paintZero = Paint()..color = const Color(0xFFEF4444)..strokeWidth = 1.5;
+    final paintZero = Paint()
+      ..color = const Color(0xFFEF4444)
+      ..strokeWidth = 1.5;
 
-    const left = 48.0; const right = 14.0; const top = 12.0; const bottom = 30.0;
-    final chartWidth  = size.width  - left - right;
-    final chartHeight = size.height - top  - bottom;
+    const left = 48.0;
+    const right = 14.0;
+    const top = 12.0;
+    const bottom = 30.0;
+    final chartWidth = size.width - left - right;
+    final chartHeight = size.height - top - bottom;
     final origin = Offset(left, top + chartHeight * 0.62);
 
     for (var i = 0; i < 5; i++) {
       final y = top + (chartHeight / 4) * i;
-      canvas.drawLine(Offset(left, y), Offset(size.width - right, y), paintGrid);
+      canvas.drawLine(
+        Offset(left, y),
+        Offset(size.width - right, y),
+        paintGrid,
+      );
     }
-    canvas.drawLine(Offset(left, origin.dy), Offset(size.width - right, origin.dy), paintZero);
+    canvas.drawLine(
+      Offset(left, origin.dy),
+      Offset(size.width - right, origin.dy),
+      paintZero,
+    );
 
     final historicalPoints = [
       Offset(left + chartWidth * 0.00, top + chartHeight * 0.34),
@@ -870,8 +875,11 @@ class _TrendChartPainter extends CustomPainter {
       Offset(left + chartWidth * 1.00, top + chartHeight * 0.88),
     ];
 
-    final historicalPath = Path()..moveTo(historicalPoints.first.dx, historicalPoints.first.dy);
-    for (final p in historicalPoints.skip(1)) { historicalPath.lineTo(p.dx, p.dy); }
+    final historicalPath = Path()
+      ..moveTo(historicalPoints.first.dx, historicalPoints.first.dy);
+    for (final p in historicalPoints.skip(1)) {
+      historicalPath.lineTo(p.dx, p.dy);
+    }
     final areaPath = Path()
       ..addPath(historicalPath, Offset.zero)
       ..lineTo(historicalPoints.last.dx, origin.dy)
@@ -881,28 +889,56 @@ class _TrendChartPainter extends CustomPainter {
     canvas.drawPath(historicalPath, paintHistorical);
 
     for (var i = 0; i < forecastPoints.length - 1; i++) {
-      _drawDashedSegment(canvas, forecastPoints[i], forecastPoints[i + 1],
-          paintForecast, dashLength: 8, gapLength: 5);
+      _drawDashedSegment(
+        canvas,
+        forecastPoints[i],
+        forecastPoints[i + 1],
+        paintForecast,
+        dashLength: 8,
+        gapLength: 5,
+      );
     }
 
     final yLabels = [
-      ('RM 60k', top), ('RM 40k', top + chartHeight * 0.25),
-      ('RM 20k', top + chartHeight * 0.50), ('RM 0k', top + chartHeight * 0.75),
+      ('RM 60k', top),
+      ('RM 40k', top + chartHeight * 0.25),
+      ('RM 20k', top + chartHeight * 0.50),
+      ('RM 0k', top + chartHeight * 0.75),
       ('RM -20k', top + chartHeight),
     ];
     for (final l in yLabels) {
       final tp = TextPainter(
-        text: TextSpan(text: l.$1, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+        text: TextSpan(
+          text: l.$1,
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       tp.paint(canvas, Offset(6, l.$2 - tp.height / 2));
     }
 
-    final xLabels = ['24 Feb','3 Mar','10 Mar','17 Mar','24 Mar','31 Mar',
-        '7 Apr','14 Apr','21 Apr','28 Apr','5 May','12 May','26 May','9 Jun'];
+    final xLabels = [
+      '24 Feb',
+      '3 Mar',
+      '10 Mar',
+      '17 Mar',
+      '24 Mar',
+      '31 Mar',
+      '7 Apr',
+      '14 Apr',
+      '21 Apr',
+      '28 Apr',
+      '5 May',
+      '12 May',
+      '26 May',
+      '9 Jun',
+    ];
     for (var i = 0; i < xLabels.length; i++) {
       final tp = TextPainter(
-        text: TextSpan(text: xLabels[i], style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
+        text: TextSpan(
+          text: xLabels[i],
+          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       final x = left + (chartWidth / (xLabels.length - 1)) * i - tp.width / 2;
@@ -910,17 +946,28 @@ class _TrendChartPainter extends CustomPainter {
     }
   }
 
-  void _drawDashedSegment(Canvas canvas, Offset start, Offset end, Paint paint,
-      {required double dashLength, required double gapLength}) {
-    final dx = end.dx - start.dx; final dy = end.dy - start.dy;
+  void _drawDashedSegment(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Paint paint, {
+    required double dashLength,
+    required double gapLength,
+  }) {
+    final dx = end.dx - start.dx;
+    final dy = end.dy - start.dy;
     final distance = math.sqrt(dx * dx + dy * dy);
     if (distance == 0) return;
-    final ux = dx / distance; final uy = dy / distance;
+    final ux = dx / distance;
+    final uy = dy / distance;
     var traveled = 0.0;
     while (traveled < distance) {
       final de = math.min(traveled + dashLength, distance);
-      canvas.drawLine(Offset(start.dx + ux * traveled, start.dy + uy * traveled),
-          Offset(start.dx + ux * de, start.dy + uy * de), paint);
+      canvas.drawLine(
+        Offset(start.dx + ux * traveled, start.dy + uy * traveled),
+        Offset(start.dx + ux * de, start.dy + uy * de),
+        paint,
+      );
       traveled += dashLength + gapLength;
     }
   }
@@ -930,14 +977,22 @@ class _TrendChartPainter extends CustomPainter {
 }
 
 class _RecommendationRow extends StatelessWidget {
-  final int index; final String title; final String subtitle;
-  final String amount; final String amountHint;
-  final Color amountColor; final Color accent;
+  final int index;
+  final String title;
+  final String subtitle;
+  final String amount;
+  final String amountHint;
+  final Color amountColor;
+  final Color accent;
 
   const _RecommendationRow({
-    required this.index, required this.title, required this.subtitle,
-    required this.amount, required this.amountHint,
-    required this.amountColor, required this.accent,
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.amount,
+    required this.amountHint,
+    required this.amountColor,
+    required this.accent,
   });
 
   @override
@@ -945,71 +1000,167 @@ class _RecommendationRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(14),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Row(children: [
-        Container(
-          width: 28, height: 28,
-          decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-          alignment: Alignment.center,
-          child: Text('$index', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 12)),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Color(0xFF0F172A))),
-            const SizedBox(height: 4),
-            Row(children: [
-              Text(subtitle, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(999)),
-                child: const Text('easy', style: TextStyle(color: Color(0xFF16A34A), fontSize: 10, fontWeight: FontWeight.w700)),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: Text(
+              '$index',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
               ),
-            ]),
-          ]),
-        ),
-        const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(amount, style: TextStyle(color: amountColor, fontSize: 14, fontWeight: FontWeight.w800)),
-          Text(amountHint, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10)),
-        ]),
-      ]),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'easy',
+                        style: TextStyle(
+                          color: Color(0xFF16A34A),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                amount,
+                style: TextStyle(
+                  color: amountColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                amountHint,
+                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
 
 class _TransactionRow extends StatelessWidget {
-  final String title; final String date; final String amount;
-  final Color amountColor; final IconData icon; final Color iconColor;
+  final String title;
+  final String date;
+  final String amount;
+  final Color amountColor;
+  final IconData icon;
+  final Color iconColor;
 
   const _TransactionRow({
-    required this.title, required this.date, required this.amount,
-    required this.amountColor, required this.icon, required this.iconColor,
+    required this.title,
+    required this.date,
+    required this.amount,
+    required this.amountColor,
+    required this.icon,
+    required this.iconColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9)))),
-      child: Row(children: [
-        Container(
-          width: 30, height: 30,
-          decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, size: 16, color: iconColor),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0F172A))),
-          const SizedBox(height: 2),
-          Text(date, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-        ])),
-        const SizedBox(width: 10),
-        Text(amount, style: TextStyle(color: amountColor, fontSize: 13, fontWeight: FontWeight.w800)),
-      ]),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  date,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            amount,
+            style: TextStyle(
+              color: amountColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1019,7 +1170,7 @@ Widget _sectionRow(
   String title,
   String subtitle, {
   String? actionText,
-  VoidCallback? onAction,  // ← NEW: replaces the dead () {}
+  VoidCallback? onAction, // ← NEW: replaces the dead () {}
 }) {
   return Row(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1028,15 +1179,26 @@ Widget _sectionRow(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F172A),
+              ),
+            ),
             const SizedBox(height: 2),
-            Text(subtitle, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+            Text(
+              subtitle,
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+            ),
           ],
         ),
       ),
       if (actionText != null)
         TextButton.icon(
-          onPressed: onAction, // ← calls the callback (null = button disabled gracefully)
+          onPressed:
+              onAction, // ← calls the callback (null = button disabled gracefully)
           icon: const Icon(Icons.chevron_right, size: 18),
           label: Text(actionText),
           style: TextButton.styleFrom(
