@@ -240,7 +240,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 14),
                 TextFormField(
                   controller: _bufferController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Safety Buffer Threshold (RM)',
                     border: OutlineInputBorder(),
@@ -307,4 +309,3 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 }
-
