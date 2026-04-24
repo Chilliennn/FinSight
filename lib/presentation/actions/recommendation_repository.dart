@@ -55,7 +55,7 @@ class RecommendationRepository {
           headers: _headers,
           body: jsonEncode({'businessId': businessId}),
         )
-        .timeout(const Duration(seconds: 120));
+        .timeout(const Duration(seconds: 180));
     return _parseList(_unwrap(res));
   }
 

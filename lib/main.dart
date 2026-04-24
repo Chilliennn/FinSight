@@ -23,8 +23,8 @@ class MyApp extends StatelessWidget {
       // Dashboard is the root route — built with nav callbacks via buildDashboardWithNav
       home: Builder(
         builder: (context) => AppLayout(
-          title: 'Dashboard',
-          child: buildDashboardWithNav(context),
+          // title: 'Dashboard',
+          // child: buildDashboardWithNav(context),
         ),
       ),
     );
