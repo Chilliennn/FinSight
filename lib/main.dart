@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'presentation/shared/app_layout.dart';
 
 void main() {
@@ -16,7 +17,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
         useMaterial3: true,
-        scaffoldBackgroundColor: Colors.white,
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
       ),
       home: const AppLayout(),
     );

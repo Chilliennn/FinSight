@@ -159,17 +159,13 @@ class RecommendationsSummary {
  *                              API CLIENT                                *
  * ====================================================================== */
 
-/// Abstract contract — makes it easy to swap real backend vs demo data.
 abstract class RisksApi {
   Future<RiskDashboardData> fetch(String businessId);
   Future<RiskDashboardData> detect(String businessId);
 
-  /// Real backend. Use when your Node.js server is running.
   factory RisksApi.http({required String baseUrl, http.Client? client}) =>
       _HttpRisksApi(baseUrl: baseUrl, client: client);
 
-  /// Demo mode — returns Maju Bakery scenario instantly, no backend needed.
-  /// Use this to preview the UI before backend is wired up.
   factory RisksApi.demo() = _DemoRisksApi;
 }
 
@@ -207,7 +203,6 @@ class _HttpRisksApi implements RisksApi {
 }
 
 /// Demo data matching the Figma mockup exactly.
-/// When backend is ready, swap `RisksApi.demo()` → `RisksApi.http(baseUrl: ...)`.
 class _DemoRisksApi implements RisksApi {
   @override
   Future<RiskDashboardData> fetch(String businessId) async {
@@ -238,61 +233,10 @@ class _DemoRisksApi implements RisksApi {
           affectedAmount: 2550,
           timeframe: 'Week 6 from now',
         ),
-        RiskAlert(
-          id: 'r2',
-          type: 'overdue_invoices',
-          category: 'Receivables',
-          severity: RiskSeverity.high,
-          title: '3 Overdue Invoices Unpaid',
-          description:
-              'RM 18,200 outstanding across 3 invoices (oldest: 39 days overdue)',
-          detailedExplanation:
-              'You have 3 invoices totalling RM 18,200 that are past their due date (oldest is 39 days overdue). Every extra day of delay increases collection risk and ties up working capital.',
-          affectedAmount: 18200,
-          timeframe: 'Now',
-        ),
-        RiskAlert(
-          id: 'r3',
-          type: 'expense_spike',
-          category: 'Expenses',
-          severity: RiskSeverity.high,
-          title: 'Operating Expenses Up 28% vs Last Month',
-          description: 'April expenses on pace to exceed March by RM 6,800',
-          detailedExplanation:
-              'Your expenses this month are on pace to reach RM 30,600, 28% higher than last month\'s RM 23,800. If the trend continues, profit margins will compress significantly.',
-          affectedAmount: 6800,
-          timeframe: 'This month',
-        ),
-        RiskAlert(
-          id: 'r4',
-          type: 'revenue_decline',
-          category: 'Revenue',
-          severity: RiskSeverity.medium,
-          title: 'Revenue Declining 3 Consecutive Months',
-          description:
-              'Monthly revenue dropped from RM 50,300 (Jan) to RM 42,800 (Apr projected)',
-          detailedExplanation:
-              'Monthly revenue has fallen for 3 consecutive months, from RM 50,300 to RM 42,800. Sustained decline will erode your cash buffer and limit reinvestment capacity.',
-          affectedAmount: 7500,
-          timeframe: 'Last 3 months',
-        ),
-        RiskAlert(
-          id: 'r5',
-          type: 'large_payable',
-          category: 'Payables',
-          severity: RiskSeverity.medium,
-          title: 'Large Supplier Payment Due in 6 Weeks',
-          description:
-              'Annual agreement renewal payment of RM 12,000 to Sunrise Ingredients',
-          detailedExplanation:
-              'A payment of RM 12,000 to Sunrise Ingredients is due in 6 weeks — a large share of your current cash balance of RM 28,450. Failing to plan for it could trigger a short-term cash squeeze.',
-          affectedAmount: 12000,
-          timeframe: 'Week 6 from now',
-        ),
       ],
-      counts: const SeverityCounts(critical: 1, high: 2, medium: 2, low: 0),
-      score: const RiskScore(score: 7.4, label: 'HIGH RISK', percent: 74),
-      lastUpdated: DateTime(2026, 4, 16),
+      counts: const SeverityCounts(critical: 1, high: 0, medium: 0, low: 0),
+      score: const RiskScore(score: 2.6, label: 'LOW RISK', percent: 26),
+      lastUpdated: DateTime(2026, 4, 22),
     );
   }
 }
@@ -304,13 +248,22 @@ class _DemoRisksApi implements RisksApi {
 class RisksPage extends StatefulWidget {
   final String businessId;
   final RisksApi api;
+
+  /// Optional — if the host passes a RecommendationsSummary explicitly,
+  /// we use it. Otherwise we auto-fetch xy's API.
   final RecommendationsSummary? recommendations;
+
+  /// Optional — called when the user taps the "View Recommendations" button
+  /// in the CTA. Usually wired by AppLayout to switch sections.
+  /// If null, the CTA is hidden entirely (avoids a dead button).
+  final VoidCallback? onGoToRecommendations;
 
   const RisksPage({
     super.key,
     required this.businessId,
     required this.api,
     this.recommendations,
+    this.onGoToRecommendations,
   });
 
   @override
@@ -320,16 +273,66 @@ class RisksPage extends StatefulWidget {
 class _RisksPageState extends State<RisksPage> {
   late Future<RiskDashboardData> _future;
 
+  /// CTA state — auto-fetched from xy's GET /api/recommendations/:businessId.
+  /// If widget.recommendations is passed explicitly, it takes precedence.
+  RecommendationsSummary? _autoRecSummary;
+
   @override
   void initState() {
     super.initState();
     _future = widget.api.fetch(widget.businessId);
+    if (widget.recommendations == null) {
+      _loadRecommendationsSummary();
+    }
+  }
+
+  /// Fetch xy's recommendations summary. Silent on failure — CTA stays hidden.
+  /// Also hidden if the host didn't wire onGoToRecommendations (dead button guard).
+  Future<void> _loadRecommendationsSummary() async {
+    // If the host didn't give us a navigation callback, don't bother fetching —
+    // the CTA would be a dead button.
+    final navCallback = widget.onGoToRecommendations;
+    if (navCallback == null) return;
+
+    try {
+      final uri = Uri.parse(
+        'http://localhost:3000/api/recommendations/${widget.businessId}',
+      );
+      final res = await http.get(uri);
+      if (res.statusCode != 200) return;
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      if (body['success'] != true) return;
+      final data = body['data'] as Map<String, dynamic>?;
+      final summary = data?['summary'] as Map<String, dynamic>?;
+      if (summary == null) return;
+
+      final count = (summary['total_recommendations'] as num?)?.toInt() ?? 0;
+      final totalImpact =
+          (summary['total_actionable_impact'] as num?)?.toDouble() ?? 0.0;
+
+      if (count == 0) return; // Nothing to show in the CTA.
+
+      if (!mounted) return;
+      setState(() {
+        _autoRecSummary = RecommendationsSummary(
+          count: count,
+          totalImpact: totalImpact,
+          onViewRecommendations: navCallback,
+        );
+      });
+    } catch (_) {
+      // Silent — CTA just stays hidden.
+    }
   }
 
   Future<void> _reDetect() async {
     setState(() {
       _future = widget.api.detect(widget.businessId);
     });
+    // Re-fetch the recommendations summary too — detect may change the CTA.
+    if (widget.recommendations == null) {
+      _loadRecommendationsSummary();
+    }
   }
 
   String _fmtDate(DateTime d) {
@@ -375,6 +378,7 @@ class _RisksPageState extends State<RisksPage> {
 
         final data = snap.data!;
         final triggeredOn = data.lastUpdated ?? DateTime.now();
+        final effectiveRecs = widget.recommendations ?? _autoRecSummary;
 
         return RefreshIndicator(
           onRefresh: _reDetect,
@@ -384,13 +388,25 @@ class _RisksPageState extends State<RisksPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Risk Alerts',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
+                // Title row — "Risk Alerts" title + refresh button aligned right.
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Risk Alerts',
+                        style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    _RefreshButton(
+                      isRefreshing:
+                          snap.connectionState != ConnectionState.done,
+                      onTap: _reDetect,
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -403,9 +419,9 @@ class _RisksPageState extends State<RisksPage> {
                 _scoreBanner(data.score, triggeredOn),
                 const SizedBox(height: 24),
                 ..._sections(data),
-                if (widget.recommendations != null) ...[
+                if (effectiveRecs != null) ...[
                   const SizedBox(height: 16),
-                  _recommendationsCta(widget.recommendations!),
+                  _recommendationsCta(effectiveRecs),
                 ],
               ],
             ),
@@ -939,8 +955,55 @@ class _Dot extends StatelessWidget {
   );
 }
 
-/// One expandable alert card. Kept as a StatefulWidget because the
-/// "View detailed explanation" needs local toggle state.
+/// Round refresh button in the top-right of the Risk Alerts page.
+/// Triggers POST /api/risks/:businessId/detect — which re-runs the
+/// rules AND calls Ilmu AI for fresh explanations.
+class _RefreshButton extends StatelessWidget {
+  final bool isRefreshing;
+  final VoidCallback onTap;
+
+  const _RefreshButton({required this.isRefreshing, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Re-run detection (calls AI for fresh analysis)',
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: isRefreshing ? null : onTap,
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              color: Colors.white,
+            ),
+            alignment: Alignment.center,
+            child: isRefreshing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF64748B),
+                    ),
+                  )
+                : const Icon(
+                    Icons.refresh_rounded,
+                    size: 20,
+                    color: Color(0xFF475569),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RiskCard extends StatefulWidget {
   final RiskAlert alert;
   final String Function(double) fmtRM;
@@ -1036,7 +1099,6 @@ class _RiskCardState extends State<_RiskCard> {
                     children: [
                       Row(
                         children: [
-                          // Severity pill
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -1209,7 +1271,7 @@ class _RiskCardState extends State<_RiskCard> {
 /* ====================================================================== *
  *          SIDEBAR BADGE — for app_layout.dart to embed                  *
  *                                                                        *
- *   Shows:  "X Active Risks" + "Last updated: dd MMM yyyy"               *
+ *   Shows:  "X Urgent Risks" + "Last updated: dd MMM yyyy"               *
  *   Source: Real backend via GET /api/risks/:businessId                  *
  *   Refresh: polls every 15s so detect results appear automatically      *
  * ====================================================================== */
@@ -1285,7 +1347,9 @@ class _RiskAlertsSidebarBadgeState extends State<RiskAlertsSidebarBadge> {
 
   @override
   Widget build(BuildContext context) {
-    // Active = critical + high (matches UI's "Active Risks" definition)
+    // Urgent = critical + high (requires action within 7 days).
+    // Medium and Low risks are visible on the page but don't count
+    // toward the sidebar's urgency signal.
     final activeCount = _data == null
         ? 0
         : _data!.counts.critical + _data!.counts.high;
@@ -1295,7 +1359,7 @@ class _RiskAlertsSidebarBadgeState extends State<RiskAlertsSidebarBadge> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0x33F59E0B), // faint amber bg
+        color: const Color(0x33F59E0B),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0x66F59E0B)),
       ),
@@ -1332,7 +1396,7 @@ class _RiskAlertsSidebarBadgeState extends State<RiskAlertsSidebarBadge> {
                   )
                 else
                   Text(
-                    '$activeCount Active Risk${activeCount == 1 ? '' : 's'}',
+                    '$activeCount Urgent Risk${activeCount == 1 ? '' : 's'}',
                     style: const TextStyle(
                       color: Color(0xFFF59E0B),
                       fontSize: 12,

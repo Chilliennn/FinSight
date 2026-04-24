@@ -1,14 +1,17 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
-import '../upload/upload_page.dart';
-import '../risks/risks_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../actions/recommendation_page.dart';
 import '../dashboard/dashboard_page.dart';
+import '../forecast/forecast_page.dart';
 import '../login/login_page.dart';
+import '../risks/risks_page.dart';
+import '../upload/upload_page.dart';
 
-enum _AppSection { dashboard, upload, risks, recommendations }
+enum _AppSection { dashboard, upload, forecast, risks, recommendations }
 
 class AppLayout extends StatefulWidget {
   final _AppSection initialSection;
@@ -41,7 +44,9 @@ class _AppLayoutState extends State<AppLayout> {
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
         final businessId = prefs.getString('business_id');
-        _businessId = (businessId == null || businessId.isEmpty) ? null : businessId;
+        _businessId = (businessId == null || businessId.isEmpty)
+            ? null
+            : businessId;
       } else {
         final home = Platform.environment['HOME'] ?? '.';
         final file = File('$home/.finsight_business_id');
@@ -67,6 +72,7 @@ class _AppLayoutState extends State<AppLayout> {
       final file = File('$home/.finsight_business_id');
       await file.writeAsString(businessId);
     }
+
     if (!mounted) return;
     setState(() {
       _businessId = businessId;
@@ -75,15 +81,12 @@ class _AppLayoutState extends State<AppLayout> {
   }
 
   void _setSection(_AppSection section, {bool closeDrawer = false}) {
-    if (_currentSection == section) {
-      if (closeDrawer && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-      return;
+    if (_currentSection != section) {
+      setState(() {
+        _currentSection = section;
+      });
     }
-    setState(() {
-      _currentSection = section;
-    });
+
     if (closeDrawer && Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
@@ -94,11 +97,25 @@ class _AppLayoutState extends State<AppLayout> {
       case _AppSection.dashboard:
         return (title: 'Dashboard', subtitle: null, showAiStatus: false);
       case _AppSection.upload:
-        return (title: 'Upload Documents', subtitle: null, showAiStatus: true);
+        return (
+          title: 'Upload Documents',
+          subtitle: _businessId,
+          showAiStatus: true,
+        );
+      case _AppSection.forecast:
+        return (
+          title: 'Cash Flow Forecast',
+          subtitle: null,
+          showAiStatus: false,
+        );
       case _AppSection.risks:
         return (title: 'Risk Alerts', subtitle: null, showAiStatus: false);
       case _AppSection.recommendations:
-        return (title: 'Recommendations', subtitle: null, showAiStatus: false);
+        return (
+          title: 'Recommendations',
+          subtitle: null,
+          showAiStatus: false,
+        );
     }
   }
 
@@ -115,81 +132,49 @@ class _AppLayoutState extends State<AppLayout> {
           onGoToRisks: () => _setSection(_AppSection.risks),
         );
       case _AppSection.upload:
-        return const UploadPage(businessId: '', businessName: '');
+        return UploadPage(
+          businessId: businessId,
+          businessName: businessId,
+        );
+      case _AppSection.forecast:
+        return const ForecastContent();
       case _AppSection.risks:
         return RisksPage(
           businessId: businessId,
           api: RisksApi.http(baseUrl: _apiBaseUrl),
+          onGoToRecommendations: () =>
+              _setSection(_AppSection.recommendations),
         );
       case _AppSection.recommendations:
         return RecommendationPage(businessId: businessId);
     }
   }
 
-  Widget _navTile(BuildContext context, IconData icon, String label) {
+  Widget _navTile(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required _AppSection section,
+  }) {
+    final isSelected = _currentSection == section;
     return ListTile(
-      leading: Icon(icon, color: Colors.white70),
-      title: Text(label, style: const TextStyle(color: Colors.white70)),
-      onTap: () {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$label tapped')));
-      },
-    );
-  }
-
-  Widget _dashboardNavTile(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.dashboard, color: Colors.white70),
-      title: const Text('Dashboard', style: TextStyle(color: Colors.white70)),
-      onTap: () {
-        _setSection(
-          _AppSection.dashboard,
-          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
-        );
-      },
-    );
-  }
-
-  Widget _uploadNavTile(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.upload_file, color: Colors.white70),
-      title: const Text(
-        'Upload Documents',
-        style: TextStyle(color: Colors.white70),
+      leading: Icon(
+        icon,
+        color: isSelected ? Colors.white : Colors.white70,
       ),
-      onTap: () {
-        _setSection(
-          _AppSection.upload,
-          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
-        );
-      },
-    );
-  }
-
-  Widget _riskAlertsNavTile(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.warning_amber_outlined, color: Colors.white70),
-      title: const Text('Risk Alerts', style: TextStyle(color: Colors.white70)),
-      onTap: () {
-        _setSection(
-          _AppSection.risks,
-          closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
-        );
-      },
-    );
-  }
-
-  Widget _recommendationsNavTile(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.lightbulb_outline, color: Colors.white70),
-      title: const Text(
-        'Recommendations',
-        style: TextStyle(color: Colors.white70),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : Colors.white70,
+          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+        ),
       ),
+      selected: isSelected,
+      selectedTileColor: const Color(0xFF172033),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onTap: () {
         _setSection(
-          _AppSection.recommendations,
+          section,
           closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
         );
       },
@@ -204,7 +189,7 @@ class _AppLayoutState extends State<AppLayout> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(16),
               child: Row(
                 children: const [
                   CircleAvatar(child: Icon(Icons.pie_chart)),
@@ -224,23 +209,49 @@ class _AppLayoutState extends State<AppLayout> {
             const Divider(color: Colors.white24),
             Expanded(
               child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 children: [
-                  _dashboardNavTile(context),
-                  _uploadNavTile(context),
-                  _navTile(context, Icons.receipt_long, 'Transactions'),
-                  _navTile(context, Icons.show_chart, 'Cash Flow Forecast'),
-                  _riskAlertsNavTile(context),
-                  _recommendationsNavTile(context),
+                  _navTile(
+                    context,
+                    icon: Icons.dashboard_outlined,
+                    label: 'Dashboard',
+                    section: _AppSection.dashboard,
+                  ),
+                  _navTile(
+                    context,
+                    icon: Icons.upload_file_outlined,
+                    label: 'Upload Documents',
+                    section: _AppSection.upload,
+                  ),
+                  _navTile(
+                    context,
+                    icon: Icons.show_chart_outlined,
+                    label: 'Cash Flow Forecast',
+                    section: _AppSection.forecast,
+                  ),
+                  _navTile(
+                    context,
+                    icon: Icons.warning_amber_outlined,
+                    label: 'Risk Alerts',
+                    section: _AppSection.risks,
+                  ),
+                  _navTile(
+                    context,
+                    icon: Icons.lightbulb_outline,
+                    label: 'Recommendations',
+                    section: _AppSection.recommendations,
+                  ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: RiskAlertsSidebarBadge(
-                businessId: _businessId!,
-                api: RisksApi.http(baseUrl: _apiBaseUrl),
+            if (_businessId != null)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: RiskAlertsSidebarBadge(
+                  businessId: _businessId!,
+                  api: RisksApi.http(baseUrl: _apiBaseUrl),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -253,35 +264,8 @@ class _AppLayoutState extends State<AppLayout> {
     final subtitle = meta.subtitle;
     final showAiStatus = meta.showAiStatus;
 
-    if (subtitle == null && !showAiStatus) {
-      return Container(
-        height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(color: Colors.white),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const Icon(Icons.notifications_none),
-            const SizedBox(width: 12),
-            CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Text('MJ'),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Container(
-      height: subtitle == null ? 64 : 102,
+      height: subtitle == null ? 72 : 102,
       padding: const EdgeInsets.symmetric(horizontal: 32),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -396,12 +380,11 @@ class _AppLayoutState extends State<AppLayout> {
       return LoginPage(onLoginSuccess: _saveBusinessId);
     }
 
-    final meta = _pageMeta();
-    final title = meta.title;
+    final title = _pageMeta().title;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bool narrow = constraints.maxWidth < 800;
+        final narrow = constraints.maxWidth < 800;
         if (narrow) {
           return Scaffold(
             backgroundColor: Colors.white,
