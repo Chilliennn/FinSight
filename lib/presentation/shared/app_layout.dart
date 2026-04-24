@@ -122,13 +122,13 @@ class _AppLayoutState extends State<AppLayout> {
         return RisksPage(
           businessId: businessId,
           api: RisksApi.http(baseUrl: _apiBaseUrl),
+          onGoToRecommendations: () => _setSection(_AppSection.recommendations),
         );
       case _AppSection.recommendations:
         return RecommendationPage(businessId: businessId);
     }
   }
 
-  // ── Original _navTile — UNTOUCHED ─────────────────────────────────────────
   Widget _navTile(BuildContext context, IconData icon, String label) {
     return ListTile(
       leading: Icon(icon, color: Colors.white70),
@@ -199,7 +199,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── _buildSidebar — Dashboard tile replaced, everything else unchanged ─────
   Widget _buildSidebar(BuildContext context) {
     return Container(
       color: const Color(0xFF0B1220),
@@ -251,7 +250,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── _buildTopBar — UNTOUCHED ──────────────────────────────────────────────
   Widget _buildTopBar(BuildContext context) {
     final meta = _pageMeta();
     final title = meta.title;
@@ -388,7 +386,6 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 
-  // ── build — UNTOUCHED ─────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     if (_loadingSession) {
