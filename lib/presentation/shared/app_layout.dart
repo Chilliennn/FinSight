@@ -43,7 +43,10 @@ class _AppLayoutState extends State<AppLayout> {
   bool _loadingSession = true;
 
   String _sessionFilePath() {
-    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+    final home =
+        Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '.';
     return '$home/.finsight_business_id';
   }
 
@@ -194,16 +197,14 @@ class _AppLayoutState extends State<AppLayout> {
           onGoToRecommendations: () => _setSection(_AppSection.recommendations),
           onGoToRisks: () => _setSection(_AppSection.risks),
           onGoToTransactions: () => _setSection(_AppSection.transactions),
+          businessId: businessId,
         );
       case _AppSection.upload:
         return UploadPage(businessId: businessId, businessName: businessId);
       case _AppSection.transactions:
         return TransactionPage(businessId: businessId);
-      case _AppSection.forecast: 
-        return ForecastContent(
-          businessId: businessId,
-          apiBaseUrl: _apiBaseUrl,
-        );
+      case _AppSection.forecast:
+        return ForecastContent(businessId: businessId, apiBaseUrl: _apiBaseUrl);
       case _AppSection.risks:
         return RisksPage(
           businessId: businessId,
@@ -454,7 +455,7 @@ class _AppLayoutState extends State<AppLayout> {
             ],
           ),
           const SizedBox(width: 24),
-           GestureDetector(
+          GestureDetector(
             onTap: () => _setSection(_AppSection.settings),
             child: const CircleAvatar(
               radius: 25,
@@ -520,4 +521,3 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 }
-
