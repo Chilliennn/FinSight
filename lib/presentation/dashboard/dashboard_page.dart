@@ -1,33 +1,120 @@
-// lib/presentation/dashboard/dashboard_page.dart
-//
-// Changes from original:
-//   1. _sectionRow() gains a BuildContext + optional VoidCallback onAction parameter.
-//      All "View all" / "All" buttons now call that callback instead of () {}.
-//   2. _RecommendationsCard gains onViewAll VoidCallback → passed by DashboardContent.
-//   3. _RiskCard gains onViewAll VoidCallback → passed by DashboardContent.
-//   4. DashboardContent gains optional onGoToRecommendations / onGoToRisks / onGoToTransactions callbacks.
-//      main.dart (or whoever builds DashboardContent) passes the Navigator calls in.
-//   5. "View Risks" alert banner button calls onGoToRisks.
-//   6. NO new imports needed — no circular dependency risk.
-//   7. All other code is IDENTICAL to the original.
-
+import 'dart:convert';
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
 
-class DashboardContent extends StatelessWidget {
-  // ── Navigation callbacks injected by the parent (main.dart / AppLayout) ──
-  // Using callbacks instead of importing AppLayout keeps this file
-  // free of circular dependencies.
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
+class DashboardContent extends StatefulWidget {
+  final String businessId;
+  final String apiBaseUrl;
   final VoidCallback? onGoToRecommendations;
   final VoidCallback? onGoToRisks;
   final VoidCallback? onGoToTransactions;
 
   const DashboardContent({
     super.key,
+    required this.businessId,
+    required this.apiBaseUrl,
     this.onGoToRecommendations,
     this.onGoToRisks,
     this.onGoToTransactions,
   });
+
+  @override
+  State<DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends State<DashboardContent> {
+  bool _isLoading = true;
+  String? _error;
+  Map<String, dynamic> _data = const {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  Future<void> _loadDashboard() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      final uri = Uri.parse('${widget.apiBaseUrl}/api/dashboard/${widget.businessId}');
+      final response = await http.get(uri, headers: {'Accept': 'application/json'});
+      final payload = jsonDecode(response.body);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Dashboard API failed (${response.statusCode})');
+      }
+
+      if (payload is! Map<String, dynamic> || payload['success'] != true) {
+        throw Exception((payload is Map<String, dynamic>)
+            ? (payload['error']?.toString() ?? 'Dashboard API returned error')
+            : 'Invalid dashboard response');
+      }
+
+      final data = payload['data'];
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Dashboard data payload missing');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _data = data;
+        _isLoading = false;
+      });
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _error = err.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  String _rm(int value) {
+    final abs = value.abs().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+    final sign = value < 0 ? '-' : '';
+    return '$sign' 'RM $abs';
+  }
+
+  String _deltaLabel(int delta) {
+    final direction = delta >= 0 ? 'UP' : 'DOWN';
+    final abs = delta.abs().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+    return '$direction RM $abs';
+  }
+
+  Color _deltaColor(int delta, {bool negativeIsGood = false}) {
+    if (delta == 0) return const Color(0xFF64748B);
+    if (negativeIsGood) {
+      return delta < 0 ? const Color(0xFF059669) : const Color(0xFFEF4444);
+    }
+    return delta > 0 ? const Color(0xFF059669) : const Color(0xFFEF4444);
+  }
+
+  List<Map<String, dynamic>> _rows(dynamic value) {
+    if (value is! List) return const [];
+    return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  String _friendlyDate(String isoDate) {
+    final parsed = DateTime.tryParse(isoDate);
+    if (parsed == null) return isoDate;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
+  }
 
   Widget _cardShell({required Widget child}) {
     return Container(
@@ -191,6 +278,51 @@ class DashboardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 36),
+              const SizedBox(height: 10),
+              Text(
+                'Unable to load dashboard\n$_error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF991B1B)),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(onPressed: _loadDashboard, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final kpis = Map<String, dynamic>.from((_data['kpis'] as Map?) ?? const {});
+    final alert = Map<String, dynamic>.from((_data['alert'] as Map?) ?? const {});
+    final riskSummary = Map<String, dynamic>.from((_data['risk_summary'] as Map?) ?? const {});
+    final recommendations = Map<String, dynamic>.from((_data['recommendations'] as Map?) ?? const {});
+    final recentTransactions = Map<String, dynamic>.from((_data['recent_transactions'] as Map?) ?? const {});
+
+    final riskRows = _rows(riskSummary['rows']);
+    final recommendationRows = _rows(recommendations['rows']);
+    final transactionRows = _rows(recentTransactions['rows']);
+
+    final currentBalance = _toInt(kpis['current_balance']);
+    final currentBalanceDelta = _toInt(kpis['current_balance_delta']);
+    final monthlyRevenue = _toInt(kpis['monthly_revenue']);
+    final monthlyRevenueDelta = _toInt(kpis['monthly_revenue_delta']);
+    final monthlyExpenses = _toInt(kpis['monthly_expenses']);
+    final monthlyExpensesDelta = _toInt(kpis['monthly_expenses_delta']);
+    final outstandingInvoices = _toInt(kpis['outstanding_invoices']);
+    final outstandingInvoicesCount = _toInt(kpis['outstanding_invoices_count']);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 1180;
@@ -200,38 +332,38 @@ class DashboardContent extends StatelessWidget {
           _metricCard(
             icon: Icons.account_balance_wallet_rounded,
             iconColor: const Color(0xFF2563EB),
-            change: '↘ 8%',
-            changeColor: const Color(0xFFEF4444),
-            value: 'RM 28,450',
+            change: _deltaLabel(currentBalanceDelta),
+            changeColor: _deltaColor(currentBalanceDelta),
+            value: _rm(currentBalance),
             title: 'Current Balance',
             subtitle: 'vs last month',
           ),
           _metricCard(
             icon: Icons.trending_up_rounded,
             iconColor: const Color(0xFF10B981),
-            change: '↘ 15%',
-            changeColor: const Color(0xFFEF4444),
-            value: 'RM 42,800',
+            change: _deltaLabel(monthlyRevenueDelta),
+            changeColor: _deltaColor(monthlyRevenueDelta),
+            value: _rm(monthlyRevenue),
             title: 'Monthly Revenue',
-            subtitle: 'vs March 2026',
+            subtitle: 'current month',
           ),
           _metricCard(
             icon: Icons.credit_card_rounded,
             iconColor: const Color(0xFFF59E0B),
-            change: '↗ 6%',
-            changeColor: const Color(0xFF059669),
-            value: 'RM 38,920',
+            change: _deltaLabel(monthlyExpensesDelta),
+            changeColor: _deltaColor(monthlyExpensesDelta, negativeIsGood: true),
+            value: _rm(monthlyExpenses),
             title: 'Monthly Expenses',
-            subtitle: 'vs March 2026',
+            subtitle: 'current month',
           ),
           _metricCard(
             icon: Icons.receipt_long_rounded,
             iconColor: const Color(0xFFEF4444),
-            change: '↘ 12%',
+            change: 'Open',
             changeColor: const Color(0xFFEF4444),
-            value: 'RM 18,200',
+            value: _rm(outstandingInvoices),
             title: 'Outstanding Invoices',
-            subtitle: '3 invoices pending',
+            subtitle: '$outstandingInvoicesCount invoices pending',
           ),
         ];
 
@@ -258,21 +390,16 @@ class DashboardContent extends StatelessWidget {
         const bottomCardHeight = 420.0;
 
         return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            18,
-            horizontalPadding,
-            24,
-          ),
+          padding: EdgeInsets.fromLTRB(horizontalPadding, 18, horizontalPadding, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(bottom: 14),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Dashboard',
                       style: TextStyle(
                         fontSize: 22,
@@ -280,16 +407,14 @@ class DashboardContent extends StatelessWidget {
                         color: Color(0xFF0F172A),
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      '16 Apr 2026',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                      _friendlyDate((_data['as_of_date'] ?? '').toString()),
+                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                     ),
                   ],
                 ),
               ),
-
-              // ── Critical alert banner ─────────────────────────────────────
               _cardShell(
                 child: Container(
                   width: double.infinity,
@@ -319,21 +444,21 @@ class DashboardContent extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Critical Alert: Cash flow gap projected in 6 weeks',
-                              style: TextStyle(
+                              (alert['title'] ?? 'Latest cash flow status').toString(),
+                              style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 color: Color(0xFFB91C1C),
                               ),
                             ),
-                            SizedBox(height: 4),
+                            const SizedBox(height: 4),
                             Text(
-                              'Projected balance of - RM 2,550 by 26 May 2026 • 3 overdue invoices totalling RM 18,200',
-                              style: TextStyle(
+                              (alert['subtitle'] ?? 'No forecast alert currently available.').toString(),
+                              style: const TextStyle(
                                 color: Color(0xFFEF4444),
                                 fontSize: 12,
                               ),
@@ -343,15 +468,11 @@ class DashboardContent extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       ElevatedButton(
-                        // ── Calls onGoToRisks callback ─────────────────────
-                        onPressed: onGoToRisks,
+                        onPressed: widget.onGoToRisks,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFEF4444),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 14,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -365,24 +486,29 @@ class DashboardContent extends StatelessWidget {
               const SizedBox(height: 14),
               metricGrid,
               const SizedBox(height: 14),
-
               if (isCompact) ...[
-                _TrendCard(cardShell: _cardShell),
+                _TrendCard(cardShell: _cardShell, alertText: (alert['subtitle'] ?? '').toString()),
                 const SizedBox(height: 14),
                 _RecommendationsCard(
                   cardShell: _cardShell,
-                  onViewAll: onGoToRecommendations, // ← wired
+                  onViewAll: widget.onGoToRecommendations,
+                  rows: recommendationRows,
+                  totalActive: _toInt(recommendations['total_active']),
                 ),
                 const SizedBox(height: 14),
                 _RiskCard(
                   cardShell: _cardShell,
                   riskTile: _riskTile,
-                  onViewAll: onGoToRisks, // ← wired
+                  onViewAll: widget.onGoToRisks,
+                  rows: riskRows,
+                  totalActive: _toInt(riskSummary['total_active']),
                 ),
                 const SizedBox(height: 14),
                 _TransactionsCard(
                   cardShell: _cardShell,
-                  onViewAll: onGoToTransactions,
+                  onViewAll: widget.onGoToTransactions,
+                  rows: transactionRows,
+                  totalCount: _toInt(recentTransactions['total']),
                 ),
               ] else ...[
                 Row(
@@ -392,7 +518,7 @@ class DashboardContent extends StatelessWidget {
                       flex: 2,
                       child: SizedBox(
                         height: topCardHeight,
-                        child: _TrendCard(cardShell: _cardShell),
+                        child: _TrendCard(cardShell: _cardShell, alertText: (alert['subtitle'] ?? '').toString()),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -402,7 +528,9 @@ class DashboardContent extends StatelessWidget {
                       child: _RiskCard(
                         cardShell: _cardShell,
                         riskTile: _riskTile,
-                        onViewAll: onGoToRisks, // ← wired
+                        onViewAll: widget.onGoToRisks,
+                        rows: riskRows,
+                        totalActive: _toInt(riskSummary['total_active']),
                       ),
                     ),
                   ],
@@ -417,7 +545,9 @@ class DashboardContent extends StatelessWidget {
                         height: bottomCardHeight,
                         child: _RecommendationsCard(
                           cardShell: _cardShell,
-                          onViewAll: onGoToRecommendations, // ← wired
+                          onViewAll: widget.onGoToRecommendations,
+                          rows: recommendationRows,
+                          totalActive: _toInt(recommendations['total_active']),
                         ),
                       ),
                     ),
@@ -427,7 +557,9 @@ class DashboardContent extends StatelessWidget {
                       height: bottomCardHeight,
                       child: _TransactionsCard(
                         cardShell: _cardShell,
-                        onViewAll: onGoToTransactions,
+                        onViewAll: widget.onGoToTransactions,
+                        rows: transactionRows,
+                        totalCount: _toInt(recentTransactions['total']),
                       ),
                     ),
                   ],
@@ -441,11 +573,11 @@ class DashboardContent extends StatelessWidget {
   }
 }
 
-// ─── Cards ────────────────────────────────────────────────────────────────────
-
 class _TrendCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
-  const _TrendCard({required this.cardShell});
+  final String alertText;
+
+  const _TrendCard({required this.cardShell, required this.alertText});
 
   @override
   Widget build(BuildContext context) {
@@ -495,16 +627,19 @@ class _TrendCard extends StatelessWidget {
                 color: const Color(0xFFFFF1F2),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Projected negative balance of -RM 2,550 on 26 May 2026',
-                    style: TextStyle(
-                      color: Color(0xFFEF4444),
-                      fontWeight: FontWeight.w700,
+                  const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      alertText.isEmpty ? 'No shortfall projected in the active window.' : alertText,
+                      style: const TextStyle(
+                        color: Color(0xFFEF4444),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -526,13 +661,30 @@ class _RiskCard extends StatelessWidget {
     required Color background,
   })
   riskTile;
-  final VoidCallback? onViewAll; // ← NEW
+  final VoidCallback? onViewAll;
+  final int totalActive;
+  final List<Map<String, dynamic>> rows;
 
   const _RiskCard({
     required this.cardShell,
     required this.riskTile,
     this.onViewAll,
+    required this.totalActive,
+    required this.rows,
   });
+
+  ({Color accent, Color background}) _severityColors(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+      case 'high':
+        return (accent: const Color(0xFFEF4444), background: const Color(0xFFFFF1F2));
+      case 'low':
+        return (accent: const Color(0xFF10B981), background: const Color(0xFFECFDF5));
+      case 'medium':
+      default:
+        return (accent: const Color(0xFFF59E0B), background: const Color(0xFFFFFBEB));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -544,43 +696,35 @@ class _RiskCard extends StatelessWidget {
           children: [
             _sectionRow(
               'Risk Alerts',
-              '5 risks detected',
+              '$totalActive risks detected',
               actionText: 'View all',
-              onAction: onViewAll, // ← wired
+              onAction: onViewAll,
             ),
             const SizedBox(height: 12),
-            riskTile(
-              title: 'Cash Flow Gap in 6 Weeks',
-              subtitle: 'RM 2,550 affected • Week 6',
-              accent: const Color(0xFFEF4444),
-              background: const Color(0xFFFFF1F2),
-            ),
-            const SizedBox(height: 10),
-            riskTile(
-              title: '3 Overdue Invoices Unpaid',
-              subtitle: 'RM 18,200 affected',
-              accent: const Color(0xFFF59E0B),
-              background: const Color(0xFFFFFBEB),
-            ),
-            const SizedBox(height: 10),
-            riskTile(
-              title: 'Operating Expenses Up 28% vs Last Month',
-              subtitle: 'RM 6,800 affected',
-              accent: const Color(0xFFF59E0B),
-              background: const Color(0xFFFFFBEB),
-            ),
-            const SizedBox(height: 10),
-            riskTile(
-              title: 'Revenue Declining 3 Consecutive Months',
-              subtitle: 'RM 7,500 affected',
-              accent: const Color(0xFFF59E0B),
-              background: const Color(0xFFFFFBEB),
-            ),
+            ...rows.take(4).map((row) {
+              final colors = _severityColors((row['severity'] ?? 'medium').toString());
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: riskTile(
+                  title: (row['title'] ?? 'Risk alert').toString(),
+                  subtitle: (row['subtitle'] ?? '').toString(),
+                  accent: colors.accent,
+                  background: colors.background,
+                ),
+              );
+            }),
+            if (rows.isEmpty)
+              riskTile(
+                title: 'No active risk alerts',
+                subtitle: 'Your risk monitor is currently clear.',
+                accent: const Color(0xFF10B981),
+                background: const Color(0xFFECFDF5),
+              ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: onViewAll, // ← wired
+                onPressed: onViewAll,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF0F172A),
                   foregroundColor: Colors.white,
@@ -608,9 +752,16 @@ class _RiskCard extends StatelessWidget {
 
 class _RecommendationsCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
-  final VoidCallback? onViewAll; // ← NEW
+  final VoidCallback? onViewAll;
+  final int totalActive;
+  final List<Map<String, dynamic>> rows;
 
-  const _RecommendationsCard({required this.cardShell, this.onViewAll});
+  const _RecommendationsCard({
+    required this.cardShell,
+    this.onViewAll,
+    required this.totalActive,
+    required this.rows,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -625,39 +776,35 @@ class _RecommendationsCard extends StatelessWidget {
                 _sectionRow(
                   'AI Recommendations',
                   'Top 3 actions by impact',
-                  actionText: 'View all 5',
-                  onAction: onViewAll, // ← wired
+                  actionText: 'View all $totalActive',
+                  onAction: onViewAll,
                 ),
                 const SizedBox(height: 12),
-                const _RecommendationRow(
-                  index: 1,
-                  title: 'Collect Overdue Invoice from TechCorp (INV-2026-089)',
-                  subtitle: 'Within 7 days • easy',
-                  amount: '+RM 8,500',
-                  amountHint: 'cash in',
-                  amountColor: Color(0xFF16A34A),
-                  accent: Color(0xFF2563EB),
-                ),
-                const SizedBox(height: 10),
-                const _RecommendationRow(
-                  index: 2,
-                  title: 'Negotiate 14-Day Extension with Sunrise Ingredients',
-                  subtitle: 'Within 2 weeks • easy',
-                  amount: '+RM 12,000',
-                  amountHint: 'buffer',
-                  amountColor: Color(0xFFF97316),
-                  accent: Color(0xFF2563EB),
-                ),
-                const SizedBox(height: 10),
-                const _RecommendationRow(
-                  index: 3,
-                  title: 'Follow Up on Axiata Invoice (INV-2026-112)',
-                  subtitle: 'Within 10 days • easy',
-                  amount: '+RM 5,500',
-                  amountHint: 'cash in',
-                  amountColor: Color(0xFF16A34A),
-                  accent: Color(0xFF2563EB),
-                ),
+                ...rows.take(3).map((row) {
+                  final amountValue = int.tryParse((row['amount_value'] ?? '0').toString()) ?? 0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _RecommendationRow(
+                      index: int.tryParse((row['index'] ?? '1').toString()) ?? 1,
+                      title: (row['title'] ?? 'Recommendation').toString(),
+                      subtitle: (row['subtitle'] ?? 'Action recommended').toString(),
+                      amount: (row['amount'] ?? '+RM 0').toString(),
+                      amountHint: (row['amount_hint'] ?? 'impact').toString(),
+                      amountColor: amountValue >= 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                      accent: const Color(0xFF2563EB),
+                    ),
+                  );
+                }),
+                if (rows.isEmpty)
+                  const _RecommendationRow(
+                    index: 1,
+                    title: 'No active recommendations',
+                    subtitle: 'Generate recommendations from the risks page.',
+                    amount: '+RM 0',
+                    amountHint: 'impact',
+                    amountColor: Color(0xFF64748B),
+                    accent: Color(0xFF2563EB),
+                  ),
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
@@ -667,18 +814,20 @@ class _RecommendationsCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: const Color(0xFFA7F3D0)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.lightbulb_outline,
                         color: Color(0xFF16A34A),
                         size: 18,
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Following top 3 recommendations prevents the cash gap and adds +RM 24,000 to your buffer.',
-                          style: TextStyle(
+                          rows.isEmpty
+                              ? 'No recommendation impact available yet. Trigger AI recommendation generation to populate this panel.'
+                              : 'Following top recommendations can improve your short-term cash buffer.',
+                          style: const TextStyle(
                             color: Color(0xFF166534),
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
@@ -710,7 +859,15 @@ class _RecommendationsCard extends StatelessWidget {
 class _TransactionsCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
   final VoidCallback? onViewAll;
-  const _TransactionsCard({required this.cardShell, this.onViewAll});
+  final int totalCount;
+  final List<Map<String, dynamic>> rows;
+
+  const _TransactionsCard({
+    required this.cardShell,
+    this.onViewAll,
+    required this.totalCount,
+    required this.rows,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -724,59 +881,32 @@ class _TransactionsCard extends StatelessWidget {
               children: [
                 _sectionRow(
                   'Recent Transactions',
-                  '42 total extracted',
+                  '$totalCount total extracted',
                   actionText: 'All',
                   onAction: onViewAll,
                 ),
                 const SizedBox(height: 12),
-                const _TransactionRow(
-                  title: 'Malayan Banking Berhad',
-                  date: '2026-04-16',
-                  amount: '+RM 4,200',
-                  amountColor: Color(0xFF16A34A),
-                  icon: Icons.trending_up_rounded,
-                  iconColor: Color(0xFF34D399),
-                ),
-                const _TransactionRow(
-                  title: 'Meta Business',
-                  date: '2026-04-15',
-                  amount: '-RM 1,200',
-                  amountColor: Color(0xFFEF4444),
-                  icon: Icons.trending_down_rounded,
-                  iconColor: Color(0xFFF87171),
-                ),
-                const _TransactionRow(
-                  title: 'Fresh Farm Sdn Bhd',
-                  date: '2026-04-14',
-                  amount: '-RM 1,100',
-                  amountColor: Color(0xFFEF4444),
-                  icon: Icons.trending_down_rounded,
-                  iconColor: Color(0xFFF87171),
-                ),
-                const _TransactionRow(
-                  title: 'Maju Bakery Counter',
-                  date: '2026-04-12',
-                  amount: '+RM 8,800',
-                  amountColor: Color(0xFF16A34A),
-                  icon: Icons.trending_up_rounded,
-                  iconColor: Color(0xFF34D399),
-                ),
-                const _TransactionRow(
-                  title: 'Maxis Berhad',
-                  date: '2026-04-10',
-                  amount: '-RM 280',
-                  amountColor: Color(0xFFEF4444),
-                  icon: Icons.trending_down_rounded,
-                  iconColor: Color(0xFFF87171),
-                ),
-                const _TransactionRow(
-                  title: 'Tenaga Nasional Berhad',
-                  date: '2026-04-08',
-                  amount: '-RM 1,320',
-                  amountColor: Color(0xFFEF4444),
-                  icon: Icons.trending_down_rounded,
-                  iconColor: Color(0xFFF87171),
-                ),
+                ...rows.take(6).map((row) {
+                  final direction = (row['direction'] ?? '').toString().toLowerCase();
+                  final isInflow = direction == 'inflow';
+                  return _TransactionRow(
+                    title: (row['title'] ?? 'Transaction').toString(),
+                    date: (row['date'] ?? '').toString(),
+                    amount: (row['amount'] ?? (isInflow ? '+RM 0' : '-RM 0')).toString(),
+                    amountColor: isInflow ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                    icon: isInflow ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                    iconColor: isInflow ? const Color(0xFF34D399) : const Color(0xFFF87171),
+                  );
+                }),
+                if (rows.isEmpty)
+                  const _TransactionRow(
+                    title: 'No transactions available',
+                    date: '-',
+                    amount: 'RM 0',
+                    amountColor: Color(0xFF64748B),
+                    icon: Icons.remove,
+                    iconColor: Color(0xFF94A3B8),
+                  ),
               ],
             );
 
@@ -795,8 +925,6 @@ class _TransactionsCard extends StatelessWidget {
     );
   }
 }
-
-// ─── Small reusable widgets (ALL UNCHANGED from original) ─────────────────────
 
 class _LegendDot extends StatelessWidget {
   final Color color;
@@ -827,6 +955,7 @@ class _LegendDot extends StatelessWidget {
 
 class _TrendChart extends StatelessWidget {
   const _TrendChart();
+
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
@@ -848,31 +977,18 @@ class _TrendChartPainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    final paintHistoricalFill = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF3B82F6).withValues(alpha: 0.18),
-          const Color(0xFF3B82F6).withValues(alpha: 0.02),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     final paintForecast = Paint()
       ..color = const Color(0xFFF59E0B)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
-    final paintZero = Paint()
-      ..color = const Color(0xFFEF4444)
-      ..strokeWidth = 1.5;
 
-    const left = 48.0;
+    const left = 40.0;
     const right = 14.0;
     const top = 12.0;
     const bottom = 30.0;
     final chartWidth = size.width - left - right;
     final chartHeight = size.height - top - bottom;
-    final origin = Offset(left, top + chartHeight * 0.62);
 
     for (var i = 0; i < 5; i++) {
       final y = top + (chartHeight / 4) * i;
@@ -882,11 +998,6 @@ class _TrendChartPainter extends CustomPainter {
         paintGrid,
       );
     }
-    canvas.drawLine(
-      Offset(left, origin.dy),
-      Offset(size.width - right, origin.dy),
-      paintZero,
-    );
 
     final historicalPoints = [
       Offset(left + chartWidth * 0.00, top + chartHeight * 0.34),
@@ -896,6 +1007,7 @@ class _TrendChartPainter extends CustomPainter {
       Offset(left + chartWidth * 0.42, top + chartHeight * 0.36),
       Offset(left + chartWidth * 0.52, top + chartHeight * 0.50),
     ];
+
     final forecastPoints = [
       Offset(left + chartWidth * 0.52, top + chartHeight * 0.50),
       Offset(left + chartWidth * 0.63, top + chartHeight * 0.47),
@@ -905,17 +1017,10 @@ class _TrendChartPainter extends CustomPainter {
       Offset(left + chartWidth * 1.00, top + chartHeight * 0.88),
     ];
 
-    final historicalPath = Path()
-      ..moveTo(historicalPoints.first.dx, historicalPoints.first.dy);
-    for (final p in historicalPoints.skip(1)) {
-      historicalPath.lineTo(p.dx, p.dy);
+    final historicalPath = Path()..moveTo(historicalPoints.first.dx, historicalPoints.first.dy);
+    for (final point in historicalPoints.skip(1)) {
+      historicalPath.lineTo(point.dx, point.dy);
     }
-    final areaPath = Path()
-      ..addPath(historicalPath, Offset.zero)
-      ..lineTo(historicalPoints.last.dx, origin.dy)
-      ..lineTo(historicalPoints.first.dx, origin.dy)
-      ..close();
-    canvas.drawPath(areaPath, paintHistoricalFill);
     canvas.drawPath(historicalPath, paintHistorical);
 
     for (var i = 0; i < forecastPoints.length - 1; i++) {
@@ -927,52 +1032,6 @@ class _TrendChartPainter extends CustomPainter {
         dashLength: 8,
         gapLength: 5,
       );
-    }
-
-    final yLabels = [
-      ('RM 60k', top),
-      ('RM 40k', top + chartHeight * 0.25),
-      ('RM 20k', top + chartHeight * 0.50),
-      ('RM 0k', top + chartHeight * 0.75),
-      ('RM -20k', top + chartHeight),
-    ];
-    for (final l in yLabels) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: l.$1,
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(6, l.$2 - tp.height / 2));
-    }
-
-    final xLabels = [
-      '24 Feb',
-      '3 Mar',
-      '10 Mar',
-      '17 Mar',
-      '24 Mar',
-      '31 Mar',
-      '7 Apr',
-      '14 Apr',
-      '21 Apr',
-      '28 Apr',
-      '5 May',
-      '12 May',
-      '26 May',
-      '9 Jun',
-    ];
-    for (var i = 0; i < xLabels.length; i++) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: xLabels[i],
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final x = left + (chartWidth / (xLabels.length - 1)) * i - tp.width / 2;
-      tp.paint(canvas, Offset(x, size.height - 18));
     }
   }
 
@@ -1003,7 +1062,7 @@ class _TrendChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter _) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _RecommendationRow extends StatelessWidget {
@@ -1064,35 +1123,12 @@ class _RecommendationRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text(
-                        'easy',
-                        style: TextStyle(
-                          color: Color(0xFF16A34A),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -1195,12 +1231,11 @@ class _TransactionRow extends StatelessWidget {
   }
 }
 
-// ── _sectionRow — now accepts optional onAction callback ──────────────────────
 Widget _sectionRow(
   String title,
   String subtitle, {
   String? actionText,
-  VoidCallback? onAction, // ← NEW: replaces the dead () {}
+  VoidCallback? onAction,
 }) {
   return Row(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1227,8 +1262,7 @@ Widget _sectionRow(
       ),
       if (actionText != null)
         TextButton.icon(
-          onPressed:
-              onAction, // ← calls the callback (null = button disabled gracefully)
+          onPressed: onAction,
           icon: const Icon(Icons.chevron_right, size: 18),
           label: Text(actionText),
           style: TextButton.styleFrom(
