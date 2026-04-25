@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 class DashboardContent extends StatefulWidget {
   final String businessId;
+  final String apiBaseUrl;
   final VoidCallback? onGoToRecommendations;
   final VoidCallback? onGoToRisks;
   final VoidCallback? onGoToTransactions;
@@ -13,6 +14,7 @@ class DashboardContent extends StatefulWidget {
   const DashboardContent({
     super.key,
     required this.businessId,
+    required this.apiBaseUrl,
     this.onGoToRecommendations,
     this.onGoToRisks,
     this.onGoToTransactions,
@@ -23,84 +25,122 @@ class DashboardContent extends StatefulWidget {
 }
 
 class _DashboardContentState extends State<DashboardContent> {
-  static const String _apiBaseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://localhost:3000',
-  );
-
-  late final http.Client _client;
-
-  DashboardData? _dashboard;
   bool _isLoading = true;
-  String? _errorMessage;
+  String? _error;
+  Map<String, dynamic> _data = const {};
 
   @override
   void initState() {
     super.initState();
-    _client = http.Client();
-    _loadDashboardData();
+    _loadDashboard();
   }
 
-  @override
-  void dispose() {
-    _client.close();
-    super.dispose();
-  }
-
-  Future<void> _loadDashboardData() async {
+  Future<void> _loadDashboard() async {
     try {
-      final dashboard = await _fetchDashboard(widget.businessId);
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      final uri = Uri.parse(
+        '${widget.apiBaseUrl}/api/dashboard/${widget.businessId}',
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      );
+      final payload = jsonDecode(response.body);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('Dashboard API failed (${response.statusCode})');
+      }
+
+      if (payload is! Map<String, dynamic> || payload['success'] != true) {
+        throw Exception(
+          (payload is Map<String, dynamic>)
+              ? (payload['error']?.toString() ?? 'Dashboard API returned error')
+              : 'Invalid dashboard response',
+        );
+      }
+
+      final data = payload['data'];
+      if (data is! Map<String, dynamic>) {
+        throw Exception('Dashboard data payload missing');
+      }
+
       if (!mounted) return;
       setState(() {
-        _dashboard = dashboard;
+        _data = data;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (err) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = e.toString();
+        _error = err.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
       });
     }
   }
 
-  Future<DashboardData> _fetchDashboard(String businessId) async {
-    final uri = Uri.parse('$_apiBaseUrl/api/dashboard/$businessId');
-    final response = await _client
-        .get(uri, headers: const {'Accept': 'application/json'})
-        .timeout(const Duration(seconds: 30));
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
 
-    final bodyText = response.body.trim();
-    final contentType = (response.headers['content-type'] ?? '').toLowerCase();
+  String _rm(int value) {
+    final abs = value.abs().toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (m) => ',',
+    );
+    final sign = value < 0 ? '-' : '';
+    return '$sign'
+        'RM $abs';
+  }
 
-    if (!contentType.contains('application/json')) {
-      final snippet = bodyText.isEmpty
-          ? '<empty body>'
-          : bodyText.substring(0, math.min(120, bodyText.length));
-      throw Exception(
-        'Expected JSON from $uri but received ${response.statusCode} '
-        '${contentType.isEmpty ? 'with unknown content-type' : 'with $contentType'}. '
-        'Body starts with: $snippet',
-      );
+  String _deltaLabel(int delta) {
+    final direction = delta >= 0 ? 'UP' : 'DOWN';
+    final abs = delta.abs().toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (m) => ',',
+    );
+    return '$direction RM $abs';
+  }
+
+  Color _deltaColor(int delta, {bool negativeIsGood = false}) {
+    if (delta == 0) return const Color(0xFF64748B);
+    if (negativeIsGood) {
+      return delta < 0 ? const Color(0xFF059669) : const Color(0xFFEF4444);
     }
+    return delta > 0 ? const Color(0xFF059669) : const Color(0xFFEF4444);
+  }
 
-    final decoded = jsonDecode(bodyText);
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception('Invalid JSON response shape from $uri');
-    }
+  List<Map<String, dynamic>> _rows(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
 
-    if (response.statusCode >= 400 || decoded['success'] != true) {
-      throw Exception(
-        decoded['error']?.toString() ?? 'Server error ${response.statusCode}',
-      );
-    }
-
-    final data = decoded['data'];
-    if (data is! Map<String, dynamic>) {
-      throw Exception('Missing dashboard data payload from $uri');
-    }
-
-    return DashboardData.fromJson(data);
+  String _friendlyDate(String isoDate) {
+    final parsed = DateTime.tryParse(isoDate);
+    if (parsed == null) return isoDate;
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
   }
 
   Widget _cardShell({required Widget child}) {
@@ -305,19 +345,61 @@ class _DashboardContentState extends State<DashboardContent> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_errorMessage != null) {
-      return Center(child: Text('Error: $_errorMessage'));
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFDC2626),
+                size: 36,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Unable to load dashboard\n$_error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF991B1B)),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                onPressed: _loadDashboard,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
-    final dashboard = _dashboard;
-    if (dashboard == null) {
-      return const SizedBox.shrink();
-    }
+    final kpis = Map<String, dynamic>.from((_data['kpis'] as Map?) ?? const {});
+    final alert = Map<String, dynamic>.from(
+      (_data['alert'] as Map?) ?? const {},
+    );
+    final riskSummary = Map<String, dynamic>.from(
+      (_data['risk_summary'] as Map?) ?? const {},
+    );
+    final recommendations = Map<String, dynamic>.from(
+      (_data['recommendations'] as Map?) ?? const {},
+    );
+    final recentTransactions = Map<String, dynamic>.from(
+      (_data['recent_transactions'] as Map?) ?? const {},
+    );
 
-    final criticalAlert =
-        dashboard.alert?.title.contains('Critical Alert') == true
-        ? dashboard.alert
-        : null;
+    final riskRows = _rows(riskSummary['rows']);
+    final recommendationRows = _rows(recommendations['rows']);
+    final transactionRows = _rows(recentTransactions['rows']);
+
+    final currentBalance = _toInt(kpis['current_balance']);
+    final currentBalanceDelta = _toInt(kpis['current_balance_delta']);
+    final monthlyRevenue = _toInt(kpis['monthly_revenue']);
+    final monthlyRevenueDelta = _toInt(kpis['monthly_revenue_delta']);
+    final monthlyExpenses = _toInt(kpis['monthly_expenses']);
+    final monthlyExpensesDelta = _toInt(kpis['monthly_expenses_delta']);
+    final outstandingInvoices = _toInt(kpis['outstanding_invoices']);
+    final outstandingInvoicesCount = _toInt(kpis['outstanding_invoices_count']);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -328,39 +410,41 @@ class _DashboardContentState extends State<DashboardContent> {
           _metricCard(
             icon: Icons.account_balance_wallet_rounded,
             iconColor: const Color(0xFF2563EB),
-            change: _formatSignedRm(dashboard.kpis.currentBalanceDelta),
-            changeColor: _changeColor(dashboard.kpis.currentBalanceDelta),
-            value: _formatRm(dashboard.kpis.currentBalance),
+            change: _deltaLabel(currentBalanceDelta),
+            changeColor: _deltaColor(currentBalanceDelta),
+            value: _rm(currentBalance),
             title: 'Current Balance',
             subtitle: 'vs last month',
           ),
           _metricCard(
             icon: Icons.trending_up_rounded,
             iconColor: const Color(0xFF10B981),
-            change: _formatSignedRm(dashboard.kpis.monthlyRevenueDelta),
-            changeColor: _changeColor(dashboard.kpis.monthlyRevenueDelta),
-            value: _formatRm(dashboard.kpis.monthlyRevenue),
+            change: _deltaLabel(monthlyRevenueDelta),
+            changeColor: _deltaColor(monthlyRevenueDelta),
+            value: _rm(monthlyRevenue),
             title: 'Monthly Revenue',
-            subtitle: 'vs last month',
+            subtitle: 'current month',
           ),
           _metricCard(
             icon: Icons.credit_card_rounded,
             iconColor: const Color(0xFFF59E0B),
-            change: _formatSignedRm(dashboard.kpis.monthlyExpensesDelta),
-            changeColor: _changeColor(dashboard.kpis.monthlyExpensesDelta),
-            value: _formatRm(dashboard.kpis.monthlyExpenses),
+            change: _deltaLabel(monthlyExpensesDelta),
+            changeColor: _deltaColor(
+              monthlyExpensesDelta,
+              negativeIsGood: true,
+            ),
+            value: _rm(monthlyExpenses),
             title: 'Monthly Expenses',
-            subtitle: 'vs last month',
+            subtitle: 'current month',
           ),
           _metricCard(
             icon: Icons.receipt_long_rounded,
             iconColor: const Color(0xFFEF4444),
-            change: _formatSignedRm(dashboard.kpis.outstandingInvoices),
+            change: 'Open',
             changeColor: const Color(0xFFEF4444),
-            value: _formatRm(dashboard.kpis.outstandingInvoices),
+            value: _rm(outstandingInvoices),
             title: 'Outstanding Invoices',
-            subtitle:
-                '${dashboard.kpis.outstandingInvoicesCount} invoices pending',
+            subtitle: '$outstandingInvoicesCount invoices pending',
           ),
         ];
 
@@ -411,9 +495,7 @@ class _DashboardContentState extends State<DashboardContent> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      dashboard.asOfDate.isEmpty
-                          ? '16 Apr 2026'
-                          : dashboard.asOfDate,
+                      _friendlyDate((_data['as_of_date'] ?? '').toString()),
                       style: const TextStyle(
                         color: Color(0xFF94A3B8),
                         fontSize: 13,
@@ -422,104 +504,109 @@ class _DashboardContentState extends State<DashboardContent> {
                   ],
                 ),
               ),
-              if (criticalAlert != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _cardShell(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFFFBEB),
-                            const Color(0xFFFFF7ED).withOpacity(0.9),
+              _cardShell(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFFFFFBEB),
+                        const Color(0xFFFFF7ED).withValues(alpha: 0.9),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              (alert['title'] ?? 'Latest cash flow status')
+                                  .toString(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFFB91C1C),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              (alert['subtitle'] ??
+                                      'No forecast alert currently available.')
+                                  .toString(),
+                              style: const TextStyle(
+                                color: Color(0xFFEF4444),
+                                fontSize: 12,
+                              ),
+                            ),
                           ],
                         ),
-                        borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEF4444),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.warning_amber_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: widget.onGoToRisks,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFEF4444),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  criticalAlert.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFFB91C1C),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  criticalAlert.subtitle,
-                                  style: const TextStyle(
-                                    color: Color(0xFFEF4444),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: widget.onGoToRisks,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFEF4444),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 14,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: const Text('View Risks'),
-                          ),
-                        ],
+                        ),
+                        child: const Text('View Risks'),
                       ),
-                    ),
+                    ],
                   ),
                 ),
+              ),
+              const SizedBox(height: 14),
               metricGrid,
               const SizedBox(height: 14),
               if (isCompact) ...[
-                _TrendCard(cardShell: _cardShell),
+                _TrendCard(
+                  cardShell: _cardShell,
+                  alertText: (alert['subtitle'] ?? '').toString(),
+                ),
                 const SizedBox(height: 14),
                 _RecommendationsCard(
                   cardShell: _cardShell,
                   onViewAll: widget.onGoToRecommendations,
-                  recommendations: dashboard.recommendations,
+                  rows: recommendationRows,
+                  totalActive: _toInt(recommendations['total_active']),
                 ),
                 const SizedBox(height: 14),
                 _RiskCard(
                   cardShell: _cardShell,
                   riskTile: _riskTile,
                   onViewAll: widget.onGoToRisks,
-                  risks: dashboard.risks,
-                  fmtRM: _formatRm,
+                  rows: riskRows,
+                  totalActive: _toInt(riskSummary['total_active']),
                 ),
                 const SizedBox(height: 14),
                 _TransactionsCard(
                   cardShell: _cardShell,
                   onViewAll: widget.onGoToTransactions,
-                  transactions: dashboard.recentTransactions,
+                  rows: transactionRows,
+                  totalCount: _toInt(recentTransactions['total']),
                 ),
               ] else ...[
                 Row(
@@ -529,7 +616,10 @@ class _DashboardContentState extends State<DashboardContent> {
                       flex: 2,
                       child: SizedBox(
                         height: topCardHeight,
-                        child: _TrendCard(cardShell: _cardShell),
+                        child: _TrendCard(
+                          cardShell: _cardShell,
+                          alertText: (alert['subtitle'] ?? '').toString(),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -540,8 +630,8 @@ class _DashboardContentState extends State<DashboardContent> {
                         cardShell: _cardShell,
                         riskTile: _riskTile,
                         onViewAll: widget.onGoToRisks,
-                        risks: dashboard.risks,
-                        fmtRM: _formatRm,
+                        rows: riskRows,
+                        totalActive: _toInt(riskSummary['total_active']),
                       ),
                     ),
                   ],
@@ -557,7 +647,8 @@ class _DashboardContentState extends State<DashboardContent> {
                         child: _RecommendationsCard(
                           cardShell: _cardShell,
                           onViewAll: widget.onGoToRecommendations,
-                          recommendations: dashboard.recommendations,
+                          rows: recommendationRows,
+                          totalActive: _toInt(recommendations['total_active']),
                         ),
                       ),
                     ),
@@ -568,7 +659,8 @@ class _DashboardContentState extends State<DashboardContent> {
                       child: _TransactionsCard(
                         cardShell: _cardShell,
                         onViewAll: widget.onGoToTransactions,
-                        transactions: dashboard.recentTransactions,
+                        rows: transactionRows,
+                        totalCount: _toInt(recentTransactions['total']),
                       ),
                     ),
                   ],
@@ -584,8 +676,9 @@ class _DashboardContentState extends State<DashboardContent> {
 
 class _TrendCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
+  final String alertText;
 
-  const _TrendCard({required this.cardShell});
+  const _TrendCard({required this.cardShell, required this.alertText});
 
   @override
   Widget build(BuildContext context) {
@@ -635,16 +728,25 @@ class _TrendCard extends StatelessWidget {
                 color: const Color(0xFFFFF1F2),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Projected negative balance of -RM 2,550 on 26 May 2026',
-                    style: TextStyle(
-                      color: Color(0xFFEF4444),
-                      fontWeight: FontWeight.w700,
+                  const Icon(
+                    Icons.error_outline,
+                    color: Color(0xFFEF4444),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      alertText.isEmpty
+                          ? 'No shortfall projected in the active window.'
+                          : alertText,
+                      style: const TextStyle(
+                        color: Color(0xFFEF4444),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -667,8 +769,8 @@ class _RiskCard extends StatelessWidget {
   })
   riskTile;
   final VoidCallback? onViewAll;
-  final List<DashboardRiskRow> risks;
-  final String Function(num) fmtRM;
+  final int totalActive;
+  final List<Map<String, dynamic>> rows;
 
   const _RiskCard({
     required this.cardShell,
@@ -676,7 +778,31 @@ class _RiskCard extends StatelessWidget {
     required this.risks,
     required this.fmtRM,
     this.onViewAll,
+    required this.totalActive,
+    required this.rows,
   });
+
+  ({Color accent, Color background}) _severityColors(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+      case 'high':
+        return (
+          accent: const Color(0xFFEF4444),
+          background: const Color(0xFFFFF1F2),
+        );
+      case 'low':
+        return (
+          accent: const Color(0xFF10B981),
+          background: const Color(0xFFECFDF5),
+        );
+      case 'medium':
+      default:
+        return (
+          accent: const Color(0xFFF59E0B),
+          background: const Color(0xFFFFFBEB),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -688,28 +814,33 @@ class _RiskCard extends StatelessWidget {
           children: [
             _sectionRow(
               'Risk Alerts',
-              '${risks.length} risks detected',
+              '$totalActive risks detected',
               actionText: 'View all',
               onAction: onViewAll,
             ),
             const SizedBox(height: 12),
-            ...risks.take(4).map((risk) {
-              final accent = _severityColor(risk.severity);
-              final background = _severityBackground(risk.severity);
-
+            ...rows.take(4).map((row) {
+              final colors = _severityColors(
+                (row['severity'] ?? 'medium').toString(),
+              );
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: riskTile(
-                  title: risk.title,
-                  subtitle: risk.subtitle.isNotEmpty
-                      ? risk.subtitle
-                      : '${fmtRM(risk.affectedAmount)} affected',
-                  accent: accent,
-                  background: background,
+                  title: (row['title'] ?? 'Risk alert').toString(),
+                  subtitle: (row['subtitle'] ?? '').toString(),
+                  accent: colors.accent,
+                  background: colors.background,
                 ),
               );
             }),
-            const Spacer(),
+            if (rows.isEmpty)
+              riskTile(
+                title: 'No active risk alerts',
+                subtitle: 'Your risk monitor is currently clear.',
+                accent: const Color(0xFF10B981),
+                background: const Color(0xFFECFDF5),
+              ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -770,12 +901,14 @@ class _RiskCard extends StatelessWidget {
 class _RecommendationsCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
   final VoidCallback? onViewAll;
-  final List<DashboardRecommendationRow> recommendations;
+  final int totalActive;
+  final List<Map<String, dynamic>> rows;
 
   const _RecommendationsCard({
     required this.cardShell,
-    required this.recommendations,
     this.onViewAll,
+    required this.totalActive,
+    required this.rows,
   });
 
   @override
@@ -783,66 +916,94 @@ class _RecommendationsCard extends StatelessWidget {
     return cardShell(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionRow(
-              'AI Recommendations',
-              'Top ranked actions by impact',
-              actionText: 'View all ${recommendations.length}',
-              onAction: onViewAll,
-            ),
-            const SizedBox(height: 12),
-            ...recommendations.take(3).map((recommendation) {
-              final amountColor = _amountColor(recommendation.amountHint);
-              final amountText = recommendation.amount.isNotEmpty
-                  ? recommendation.amount
-                  : _formatSignedRm(recommendation.amountValue);
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionRow(
+                  'AI Recommendations',
+                  'Top 3 actions by impact',
+                  actionText: 'View all $totalActive',
+                  onAction: onViewAll,
+                ),
+                const SizedBox(height: 12),
+                ...rows.take(3).map((row) {
+                  final amountValue =
+                      int.tryParse((row['amount_value'] ?? '0').toString()) ??
+                      0;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _RecommendationRow(
+                      index:
+                          int.tryParse((row['index'] ?? '1').toString()) ?? 1,
+                      title: (row['title'] ?? 'Recommendation').toString(),
+                      subtitle: (row['subtitle'] ?? 'Action recommended')
+                          .toString(),
+                      amount: (row['amount'] ?? '+RM 0').toString(),
+                      amountHint: (row['amount_hint'] ?? 'impact').toString(),
+                      amountColor: amountValue >= 0
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444),
+                      accent: const Color(0xFF2563EB),
+                    ),
+                  );
+                }),
+                if (rows.isEmpty)
+                  const _RecommendationRow(
+                    index: 1,
+                    title: 'No active recommendations',
+                    subtitle: 'Generate recommendations from the risks page.',
+                    amount: '+RM 0',
+                    amountHint: 'impact',
+                    amountColor: Color(0xFF64748B),
+                    accent: Color(0xFF2563EB),
+                  ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.lightbulb_outline,
+                        color: Color(0xFF16A34A),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          rows.isEmpty
+                              ? 'No recommendation impact available yet. Trigger AI recommendation generation to populate this panel.'
+                              : 'Following top recommendations can improve your short-term cash buffer.',
+                          style: const TextStyle(
+                            color: Color(0xFF166534),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _RecommendationRow(
-                  index: recommendation.index,
-                  title: recommendation.title,
-                  subtitle: recommendation.subtitle,
-                  amount: amountText,
-                  amountHint: recommendation.amountHint,
-                  amountColor: amountColor,
-                  accent: const Color(0xFF2563EB),
+            if (constraints.maxHeight.isFinite) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: content,
                 ),
               );
-            }),
-            const Spacer(),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0FDF4),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFA7F3D0)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.lightbulb_outline,
-                    color: Color(0xFF16A34A),
-                    size: 18,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'AI Logic: Following recommendations prevents cash flow gaps and increases stability.',
-                      style: TextStyle(
-                        color: Color(0xFF166534),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            }
+            return content;
+          },
         ),
       ),
     );
@@ -881,12 +1042,14 @@ class _RecommendationsCard extends StatelessWidget {
 class _TransactionsCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
   final VoidCallback? onViewAll;
-  final List<DashboardTransactionRow> transactions;
+  final int totalCount;
+  final List<Map<String, dynamic>> rows;
 
   const _TransactionsCard({
     required this.cardShell,
-    required this.transactions,
     this.onViewAll,
+    required this.totalCount,
+    required this.rows,
   });
 
   @override
@@ -894,54 +1057,64 @@ class _TransactionsCard extends StatelessWidget {
     return cardShell(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionRow(
-              'Recent Transactions',
-              '${transactions.length} total extracted',
-              actionText: 'All',
-              onAction: onViewAll,
-            ),
-            const SizedBox(height: 12),
-            ...transactions.map(
-              (transaction) => _TransactionRow(
-                title: transaction.title,
-                date: transaction.date,
-                amount: transaction.amount.isNotEmpty
-                    ? transaction.amount
-                    : _formatSignedRm(transaction.amountValue),
-                amountColor: transaction.amountValue >= 0
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFEF4444),
-                icon: transaction.amountValue >= 0
-                    ? Icons.trending_up_rounded
-                    : Icons.trending_down_rounded,
-                iconColor: transaction.amountValue >= 0
-                    ? const Color(0xFF34D399)
-                    : const Color(0xFFF87171),
-              ),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionRow(
+                  'Recent Transactions',
+                  '$totalCount total extracted',
+                  actionText: 'All',
+                  onAction: onViewAll,
+                ),
+                const SizedBox(height: 12),
+                ...rows.take(6).map((row) {
+                  final direction = (row['direction'] ?? '')
+                      .toString()
+                      .toLowerCase();
+                  final isInflow = direction == 'inflow';
+                  return _TransactionRow(
+                    title: (row['title'] ?? 'Transaction').toString(),
+                    date: (row['date'] ?? '').toString(),
+                    amount: (row['amount'] ?? (isInflow ? '+RM 0' : '-RM 0'))
+                        .toString(),
+                    amountColor: isInflow
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFEF4444),
+                    icon: isInflow
+                        ? Icons.trending_up_rounded
+                        : Icons.trending_down_rounded,
+                    iconColor: isInflow
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFFF87171),
+                  );
+                }),
+                if (rows.isEmpty)
+                  const _TransactionRow(
+                    title: 'No transactions available',
+                    date: '-',
+                    amount: 'RM 0',
+                    amountColor: Color(0xFF64748B),
+                    icon: Icons.remove,
+                    iconColor: Color(0xFF94A3B8),
+                  ),
+              ],
+            );
+
+            if (constraints.maxHeight.isFinite) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: content,
+                ),
+              );
+            }
+            return content;
+          },
         ),
       ),
     );
-  }
-
-  String _formatSignedRm(num value) {
-    final rounded = value.round();
-    final prefix = rounded >= 0 ? '+' : '-';
-    final digits = rounded.abs().toString();
-    final buffer = StringBuffer();
-
-    for (var index = 0; index < digits.length; index++) {
-      if (index > 0 && (digits.length - index) % 3 == 0) {
-        buffer.write(',');
-      }
-      buffer.write(digits[index]);
-    }
-
-    return '${prefix}RM ${buffer.toString()}';
   }
 }
 
@@ -997,31 +1170,18 @@ class _TrendChartPainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
-    final paintHistoricalFill = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF3B82F6).withOpacity(0.18),
-          const Color(0xFF3B82F6).withOpacity(0.02),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     final paintForecast = Paint()
       ..color = const Color(0xFFF59E0B)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
-    final paintZero = Paint()
-      ..color = const Color(0xFFEF4444)
-      ..strokeWidth = 1.5;
 
-    const left = 48.0;
+    const left = 40.0;
     const right = 14.0;
     const top = 12.0;
     const bottom = 30.0;
     final chartWidth = size.width - left - right;
     final chartHeight = size.height - top - bottom;
-    final origin = Offset(left, top + chartHeight * 0.62);
 
     for (var i = 0; i < 5; i++) {
       final y = top + (chartHeight / 4) * i;
@@ -1032,12 +1192,6 @@ class _TrendChartPainter extends CustomPainter {
       );
     }
 
-    canvas.drawLine(
-      Offset(left, origin.dy),
-      Offset(size.width - right, origin.dy),
-      paintZero,
-    );
-
     final historicalPoints = [
       Offset(left + chartWidth * 0.00, top + chartHeight * 0.34),
       Offset(left + chartWidth * 0.10, top + chartHeight * 0.31),
@@ -1046,6 +1200,7 @@ class _TrendChartPainter extends CustomPainter {
       Offset(left + chartWidth * 0.42, top + chartHeight * 0.36),
       Offset(left + chartWidth * 0.52, top + chartHeight * 0.50),
     ];
+
     final forecastPoints = [
       Offset(left + chartWidth * 0.52, top + chartHeight * 0.50),
       Offset(left + chartWidth * 0.63, top + chartHeight * 0.47),
@@ -1060,14 +1215,6 @@ class _TrendChartPainter extends CustomPainter {
     for (final point in historicalPoints.skip(1)) {
       historicalPath.lineTo(point.dx, point.dy);
     }
-
-    final areaPath = Path()
-      ..addPath(historicalPath, Offset.zero)
-      ..lineTo(historicalPoints.last.dx, origin.dy)
-      ..lineTo(historicalPoints.first.dx, origin.dy)
-      ..close();
-
-    canvas.drawPath(areaPath, paintHistoricalFill);
     canvas.drawPath(historicalPath, paintHistorical);
 
     for (var i = 0; i < forecastPoints.length - 1; i++) {
@@ -1079,55 +1226,6 @@ class _TrendChartPainter extends CustomPainter {
         dashLength: 8,
         gapLength: 5,
       );
-    }
-
-    final yLabels = [
-      ('RM 60k', top),
-      ('RM 40k', top + chartHeight * 0.25),
-      ('RM 20k', top + chartHeight * 0.50),
-      ('RM 0k', top + chartHeight * 0.75),
-      ('RM -20k', top + chartHeight),
-    ];
-
-    for (final label in yLabels) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label.$1,
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(6, label.$2 - tp.height / 2));
-    }
-
-    final xLabels = [
-      '24 Feb',
-      '3 Mar',
-      '10 Mar',
-      '17 Mar',
-      '24 Mar',
-      '31 Mar',
-      '7 Apr',
-      '14 Apr',
-      '21 Apr',
-      '28 Apr',
-      '5 May',
-      '12 May',
-      '26 May',
-      '9 Jun',
-    ];
-
-    for (var i = 0; i < xLabels.length; i++) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: xLabels[i],
-          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      final x = left + (chartWidth / (xLabels.length - 1)) * i - tp.width / 2;
-      tp.paint(canvas, Offset(x, size.height - 18));
     }
   }
 
@@ -1160,7 +1258,7 @@ class _TrendChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter _) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _RecommendationRow extends StatelessWidget {
@@ -1221,35 +1319,12 @@ class _RecommendationRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        amountHint,
-                        style: const TextStyle(
-                          color: Color(0xFF16A34A),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF94A3B8),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
