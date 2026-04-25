@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+// lib/main.dart
 
+import 'package:flutter/material.dart';
 import 'presentation/shared/app_layout.dart';
 
 void main() {
@@ -17,9 +18,15 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+        scaffoldBackgroundColor: Colors.white,
       ),
-      home: const AppLayout(),
+      // Dashboard is the root route — built with nav callbacks via buildDashboardWithNav
+      home: Builder(
+        builder: (context) => AppLayout(
+          // title: 'Dashboard',
+          // child: buildDashboardWithNav(context),
+        ),
+      ),
     );
   }
 }
