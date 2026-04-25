@@ -387,18 +387,6 @@ class _DashboardContentState extends State<DashboardContent> {
     final recentTransactions = Map<String, dynamic>.from(
       (_data['recent_transactions'] as Map?) ?? const {},
     );
-    final alert = Map<String, dynamic>.from(
-      (_data['alert'] as Map?) ?? const {},
-    );
-    final riskSummary = Map<String, dynamic>.from(
-      (_data['risk_summary'] as Map?) ?? const {},
-    );
-    final recommendations = Map<String, dynamic>.from(
-      (_data['recommendations'] as Map?) ?? const {},
-    );
-    final recentTransactions = Map<String, dynamic>.from(
-      (_data['recent_transactions'] as Map?) ?? const {},
-    );
     final trend = Map<String, dynamic>.from(
       (_data['trend'] as Map?) ?? const {},
     );
@@ -602,10 +590,6 @@ class _DashboardContentState extends State<DashboardContent> {
                 _TrendCard(
                   cardShell: _cardShell,
                   alertText: (alert['subtitle'] ?? '').toString(),
-                ),
-                _TrendCard(
-                  cardShell: _cardShell,
-                  alertText: (alert['subtitle'] ?? '').toString(),
                   historicalTrend: historicalTrendRows,
                   forecastTrend: forecastTrendRows,
                 ),
@@ -639,10 +623,6 @@ class _DashboardContentState extends State<DashboardContent> {
                       flex: 2,
                       child: SizedBox(
                         height: topCardHeight,
-                        child: _TrendCard(
-                          cardShell: _cardShell,
-                          alertText: (alert['subtitle'] ?? '').toString(),
-                        ),
                         child: _TrendCard(
                           cardShell: _cardShell,
                           alertText: (alert['subtitle'] ?? '').toString(),
@@ -817,8 +797,6 @@ class _RiskCard extends StatelessWidget {
   const _RiskCard({
     required this.cardShell,
     required this.riskTile,
-    required this.risks,
-    required this.fmtRM,
     this.onViewAll,
     required this.totalActive,
     required this.rows,

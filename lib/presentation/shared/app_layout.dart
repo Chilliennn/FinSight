@@ -199,7 +199,6 @@ class _AppLayoutState extends State<AppLayout> {
           onGoToRecommendations: () => _setSection(_AppSection.recommendations),
           onGoToRisks: () => _setSection(_AppSection.risks),
           onGoToTransactions: () => _setSection(_AppSection.transactions),
-          businessId: businessId,
         );
       case _AppSection.upload:
         return UploadPage(businessId: businessId, businessName: businessId);
