@@ -45,27 +45,10 @@ class _ForecastContentState extends State<ForecastContent> {
         _errorMessage = null;
       });
 
-      final uri = Uri.parse(
-        '${widget.apiBaseUrl}/api/forecast/${widget.businessId}',
-      );
-      final response = await http.get(uri, headers: {
-        'Accept': 'application/json',
-      });
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception(
-          'Forecast API failed (${response.statusCode}): ${response.body}',
-        );
-      }
-
-      final decoded = jsonDecode(response.body);
-      if (decoded is! Map<String, dynamic>) {
-        throw Exception('Invalid forecast response format');
-      }
-
-      final success = decoded['success'] == true;
-      if (!success) {
-        throw Exception(decoded['error']?.toString() ?? 'Forecast API returned error');
+      var decoded = await _fetchForecastEnvelope(allowNotFound: true);
+      if (decoded['success'] != true) {
+        await _generateForecastInBackend();
+        decoded = await _fetchForecastEnvelope();
       }
 
       final rawData = decoded['data'];
@@ -73,13 +56,80 @@ class _ForecastContentState extends State<ForecastContent> {
         throw Exception('Forecast data payload missing or invalid');
       }
 
+      if (!mounted) return;
       setState(() {
         _forecastData = _normalizeForecastData(rawData);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Unable to load forecast from backend. ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchForecastEnvelope({bool allowNotFound = false}) async {
+    final uri = Uri.parse('${widget.apiBaseUrl}/api/forecast/${widget.businessId}');
+    final response = await http.get(uri, headers: {'Accept': 'application/json'});
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid forecast response format');
+    }
+
+    if (response.statusCode == 404 && allowNotFound) {
+      return {'success': false, 'data': null, 'error': decoded['error'] ?? 'No forecast found'};
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Forecast API failed (${response.statusCode}): ${decoded['error'] ?? response.body}');
+    }
+
+    if (decoded['success'] != true) {
+      throw Exception(decoded['error']?.toString() ?? 'Forecast API returned error');
+    }
+
+    return decoded;
+  }
+
+  Future<void> _generateForecastInBackend() async {
+    final uri = Uri.parse('${widget.apiBaseUrl}/api/forecast/generate');
+    final response = await http.post(
+      uri,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'businessId': widget.businessId,
+        'projectionDays': 56,
+      }),
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Invalid forecast generation response format');
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300 || decoded['success'] != true) {
+      throw Exception(decoded['error']?.toString() ?? 'Failed to generate forecast from backend');
+    }
+  }
+
+  Future<void> _regenerateForecast() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+      await _generateForecastInBackend();
+      await _loadForecastData();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Unable to regenerate forecast. ${e.toString()}';
         _isLoading = false;
       });
     }
@@ -132,30 +182,42 @@ class _ForecastContentState extends State<ForecastContent> {
 
     final risk = Map<String, dynamic>.from((raw['risk_summary'] as Map?) ?? const {});
     final shortfallDate = (risk['projected_shortfall_date'] ?? '').toString();
+    final minProjectedBalance = _toInt(risk['minimum_projected_balance'], fallback: minBal);
+    final atRiskDays = _toInt(risk['at_risk_days']);
+    final hasShortfallRisk = risk['has_shortfall_risk'] == true || minProjectedBalance < 0;
 
     final ai = Map<String, dynamic>.from((raw['ai_insights'] as Map?) ?? const {});
+    final generatedAt = DateTime.tryParse((raw['generated_at'] ?? '').toString()) ?? DateTime.now();
 
     return {
       'business_id': raw['business_id'] ?? widget.businessId,
       'current_balance': _toInt(raw['current_balance']),
-      'generated_at': raw['generated_at'] ?? DateTime.now().toIso8601String(),
+      'generated_at': generatedAt.toIso8601String(),
+      'projection_period_days': _toInt(raw['projection_period_days'], fallback: 56),
       'weekly_totals': weekly,
       'risk_summary': {
         'risk_level': (risk['risk_level'] ?? 'Low').toString(),
-        'minimum_projected_balance': _toInt(risk['minimum_projected_balance'], fallback: minBal),
+        'minimum_projected_balance': minProjectedBalance,
         'projected_shortfall_date': shortfallDate,
+        'at_risk_days': atRiskDays,
+        'has_shortfall_risk': hasShortfallRisk,
       },
       'kpis': {
         'avg_weekly_inflow': avgIn,
         'avg_weekly_outflow': avgOut,
       },
-      'cash_gap_note': shortfallDate.isNotEmpty
-          ? 'Cash gap projected around $shortfallDate. Review outflows and apply recommendations early.'
-          : 'No shortfall date projected in the current forecast window.',
+      'cash_gap_note': hasShortfallRisk
+          ? (shortfallDate.isNotEmpty
+              ? 'Cash gap projected around $shortfallDate. Review outflows and apply recommendations early.'
+              : 'Cash shortfall risk detected in this forecast window. Review outflow-heavy weeks now.')
+          : 'No shortfall risk projected in the current forecast window.',
       'ai_insights': {
         'summary': (ai['summary'] ?? 'Forecast loaded from backend.').toString(),
         'warnings': (ai['warnings'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
         'opportunities': (ai['opportunities'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+        'recommended_actions': (ai['recommended_actions'] as List<dynamic>? ?? const [])
+            .map((e) => e.toString())
+            .toList(),
       },
     };
   }
@@ -164,116 +226,6 @@ class _ForecastContentState extends State<ForecastContent> {
     if (value is int) return value;
     if (value is num) return value.round();
     return int.tryParse(value?.toString() ?? '') ?? fallback;
-  }
-
-  Map<String, dynamic> _generateMockForecastData() {
-    final weekly = <Map<String, dynamic>>[
-      {
-        'week': 1,
-        'period': '21 Apr',
-        'total_inflow': 11000,
-        'total_outflow': 9500,
-        'net_flow': 1500,
-        'end_of_week_balance': 29950,
-      },
-      {
-        'week': 2,
-        'period': '28 Apr',
-        'total_inflow': 10500,
-        'total_outflow': 9000,
-        'net_flow': 1500,
-        'end_of_week_balance': 31450,
-      },
-      {
-        'week': 3,
-        'period': '5 May',
-        'total_inflow': 10000,
-        'total_outflow': 12000,
-        'net_flow': -2000,
-        'end_of_week_balance': 29450,
-      },
-      {
-        'week': 4,
-        'period': '12 May',
-        'total_inflow': 9500,
-        'total_outflow': 12500,
-        'net_flow': -3000,
-        'end_of_week_balance': 26450,
-      },
-      {
-        'week': 5,
-        'period': '19 May',
-        'total_inflow': 9000,
-        'total_outflow': 15500,
-        'net_flow': -6500,
-        'end_of_week_balance': 19950,
-      },
-      {
-        'week': 6,
-        'period': '26 May',
-        'total_inflow': 8500,
-        'total_outflow': 22500,
-        'net_flow': -14000,
-        'end_of_week_balance': -2550,
-      },
-      {
-        'week': 7,
-        'period': '2 Jun',
-        'total_inflow': 9000,
-        'total_outflow': 14500,
-        'net_flow': -5500,
-        'end_of_week_balance': -8050,
-      },
-      {
-        'week': 8,
-        'period': '9 Jun',
-        'total_inflow': 10500,
-        'total_outflow': 8000,
-        'net_flow': 2500,
-        'end_of_week_balance': -4050,
-      },
-    ];
-
-    final minBal = weekly
-        .map((w) => w['end_of_week_balance'] as int)
-        .reduce((a, b) => math.min(a, b));
-
-    final avgIn = (weekly.fold<int>(0, (s, w) => s + (w['total_inflow'] as int)) /
-            weekly.length)
-        .round();
-
-    final avgOut = (weekly.fold<int>(0, (s, w) => s + (w['total_outflow'] as int)) /
-            weekly.length)
-        .round();
-
-    return {
-      'business_id': 'BUSINESS_001',
-      'current_balance': 28450,
-      'generated_at': DateTime.now().toIso8601String(),
-      'weekly_totals': weekly,
-      'risk_summary': {
-        'risk_level': 'High',
-        'minimum_projected_balance': minBal,
-        'projected_shortfall_date': '26 May 2026',
-      },
-      'kpis': {
-        'avg_weekly_inflow': avgIn,
-        'avg_weekly_outflow': avgOut,
-      },
-      'cash_gap_note':
-          'Cash gap detected at week of 26 May: projected balance of -RM 2,550. Major outflows: salaries, rent and annual supplier payment.',
-      'ai_insights': {
-        'summary':
-            'Following the top recommendations (collect invoices, defer supplier payment, reduce marketing) can remove the projected gap and improve cash balance.',
-        'warnings': [
-          'Week 6 to Week 8 show negative ending balances without intervention.',
-        ],
-        'opportunities': [
-          'Accelerate receivables collection in Week 4 and Week 5.',
-          'Move non-critical spending out of Week 6.',
-        ],
-      },
-    };
   }
 
   String _rm(num value, {bool withSign = false}) {
@@ -361,12 +313,30 @@ class _ForecastContentState extends State<ForecastContent> {
                           color: const Color(0xFF64748B),
                         ),
                   ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Generated ${DateFormat('d MMM yyyy, h:mm a').format(DateTime.tryParse((_forecastData['generated_at'] ?? '').toString()) ?? DateTime.now())}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF94A3B8),
+                        ),
+                  ),
                 ],
               ),
-              OutlinedButton.icon(
-                onPressed: _loadForecastData,
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Refresh'),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _loadForecastData,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Refresh'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _regenerateForecast,
+                    icon: const Icon(Icons.auto_graph, size: 18),
+                    label: const Text('Regenerate'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -392,8 +362,14 @@ class _ForecastContentState extends State<ForecastContent> {
 
   Widget _buildTopKpiRow() {
     final kpi = _forecastData['kpis'] as Map<String, dynamic>;
+    final risk = _forecastData['risk_summary'] as Map<String, dynamic>;
     final currentBalance = (_forecastData['current_balance'] ?? 0) as int;
-    final minBalance = (_forecastData['risk_summary']['minimum_projected_balance'] ?? 0) as int;
+    final minBalance = (risk['minimum_projected_balance'] ?? 0) as int;
+    final riskLevel = (risk['risk_level'] ?? 'Low').toString();
+    final atRiskDays = (risk['at_risk_days'] ?? 0) as int;
+    final minBalanceSubtitle = atRiskDays > 0
+        ? '$riskLevel risk • $atRiskDays at-risk day${atRiskDays == 1 ? '' : 's'}'
+        : '$riskLevel risk • no at-risk days';
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -409,7 +385,7 @@ class _ForecastContentState extends State<ForecastContent> {
           _kpiCard(
             title: 'Avg Weekly Inflow',
             value: _rm(kpi['avg_weekly_inflow'] as int),
-            subtitle: '8-week historical avg',
+            subtitle: 'Forecast horizon average',
             icon: Icons.trending_up,
             tint: const Color(0xFF059669),
             border: const Color(0xFFA7F3D0),
@@ -417,7 +393,7 @@ class _ForecastContentState extends State<ForecastContent> {
           _kpiCard(
             title: 'Avg Weekly Outflow',
             value: _rm(kpi['avg_weekly_outflow'] as int),
-            subtitle: '8-week historical avg',
+            subtitle: 'Forecast horizon average',
             icon: Icons.trending_down,
             tint: const Color(0xFFDC2626),
             border: const Color(0xFFFECACA),
@@ -425,7 +401,7 @@ class _ForecastContentState extends State<ForecastContent> {
           _kpiCard(
             title: 'Projected Min Balance',
             value: _rm(minBalance, withSign: minBalance < 0),
-            subtitle: 'Week with lowest balance',
+            subtitle: minBalanceSubtitle,
             icon: Icons.warning_amber_rounded,
             tint: const Color(0xFFDC2626),
             border: const Color(0xFFFECACA),
@@ -686,7 +662,17 @@ class _ForecastContentState extends State<ForecastContent> {
   }
 
   Widget _buildRecommendationBanner() {
-    final summary = (_forecastData['ai_insights']['summary'] ?? '') as String;
+    final ai = _forecastData['ai_insights'] as Map<String, dynamic>;
+    final summary = (ai['summary'] ?? '') as String;
+    final warnings = (ai['warnings'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
+    final opportunities = (ai['opportunities'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
+    final recommendedActions =
+        (ai['recommended_actions'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
+    final insights = [
+      ...recommendedActions.take(2).map((i) => 'Action: $i'),
+      ...warnings.take(1).map((i) => 'Risk: $i'),
+      ...opportunities.take(1).map((i) => 'Opportunity: $i'),
+    ];
 
     return Container(
       width: double.infinity,
@@ -696,25 +682,32 @@ class _ForecastContentState extends State<ForecastContent> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF86EFAC)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.tips_and_updates_outlined, color: Color(0xFF166534)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              summary,
-              style: const TextStyle(color: Color(0xFF166534), fontWeight: FontWeight.w600),
-            ),
+          Row(
+            children: [
+              const Icon(Icons.tips_and_updates_outlined, color: Color(0xFF166534)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  summary,
+                  style: const TextStyle(color: Color(0xFF166534), fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF059669),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {},
-            child: const Text('Show Impact'),
-          ),
+          if (insights.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            for (final insight in insights)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '• $insight',
+                  style: const TextStyle(color: Color(0xFF166534), fontSize: 13),
+                ),
+              ),
+          ],
         ],
       ),
     );

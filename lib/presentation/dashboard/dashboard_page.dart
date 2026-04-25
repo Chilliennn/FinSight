@@ -387,10 +387,27 @@ class _DashboardContentState extends State<DashboardContent> {
     final recentTransactions = Map<String, dynamic>.from(
       (_data['recent_transactions'] as Map?) ?? const {},
     );
+    final alert = Map<String, dynamic>.from(
+      (_data['alert'] as Map?) ?? const {},
+    );
+    final riskSummary = Map<String, dynamic>.from(
+      (_data['risk_summary'] as Map?) ?? const {},
+    );
+    final recommendations = Map<String, dynamic>.from(
+      (_data['recommendations'] as Map?) ?? const {},
+    );
+    final recentTransactions = Map<String, dynamic>.from(
+      (_data['recent_transactions'] as Map?) ?? const {},
+    );
+    final trend = Map<String, dynamic>.from(
+      (_data['trend'] as Map?) ?? const {},
+    );
 
     final riskRows = _rows(riskSummary['rows']);
     final recommendationRows = _rows(recommendations['rows']);
     final transactionRows = _rows(recentTransactions['rows']);
+    final historicalTrendRows = _rows(trend['historical']);
+    final forecastTrendRows = _rows(trend['forecast']);
 
     final currentBalance = _toInt(kpis['current_balance']);
     final currentBalanceDelta = _toInt(kpis['current_balance_delta']);
@@ -586,6 +603,12 @@ class _DashboardContentState extends State<DashboardContent> {
                   cardShell: _cardShell,
                   alertText: (alert['subtitle'] ?? '').toString(),
                 ),
+                _TrendCard(
+                  cardShell: _cardShell,
+                  alertText: (alert['subtitle'] ?? '').toString(),
+                  historicalTrend: historicalTrendRows,
+                  forecastTrend: forecastTrendRows,
+                ),
                 const SizedBox(height: 14),
                 _RecommendationsCard(
                   cardShell: _cardShell,
@@ -619,6 +642,12 @@ class _DashboardContentState extends State<DashboardContent> {
                         child: _TrendCard(
                           cardShell: _cardShell,
                           alertText: (alert['subtitle'] ?? '').toString(),
+                        ),
+                        child: _TrendCard(
+                          cardShell: _cardShell,
+                          alertText: (alert['subtitle'] ?? '').toString(),
+                          historicalTrend: historicalTrendRows,
+                          forecastTrend: forecastTrendRows,
                         ),
                       ),
                     ),
@@ -677,8 +706,15 @@ class _DashboardContentState extends State<DashboardContent> {
 class _TrendCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
   final String alertText;
+  final List<Map<String, dynamic>> historicalTrend;
+  final List<Map<String, dynamic>> forecastTrend;
 
-  const _TrendCard({required this.cardShell, required this.alertText});
+  const _TrendCard({
+    required this.cardShell,
+    required this.alertText,
+    required this.historicalTrend,
+    required this.forecastTrend,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -719,7 +755,13 @@ class _TrendCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            const SizedBox(height: 235, child: _TrendChart()),
+            SizedBox(
+              height: 235,
+              child: _TrendChart(
+                historicalTrend: historicalTrend,
+                forecastTrend: forecastTrend,
+              ),
+            ),
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
@@ -1147,18 +1189,54 @@ class _LegendDot extends StatelessWidget {
 }
 
 class _TrendChart extends StatelessWidget {
-  const _TrendChart();
+  final List<Map<String, dynamic>> historicalTrend;
+  final List<Map<String, dynamic>> forecastTrend;
+
+  const _TrendChart({
+    required this.historicalTrend,
+    required this.forecastTrend,
+  });
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _TrendChartPainter(),
+      painter: _TrendChartPainter(
+        historicalTrend: historicalTrend,
+        forecastTrend: forecastTrend,
+      ),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _TrendChartPainter extends CustomPainter {
+  final List<Map<String, dynamic>> historicalTrend;
+  final List<Map<String, dynamic>> forecastTrend;
+
+  _TrendChartPainter({
+    required this.historicalTrend,
+    required this.forecastTrend,
+  });
+
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  List<({String label, double value})> _mapped(
+    List<Map<String, dynamic>> rows,
+  ) {
+    return rows
+        .map(
+          (r) => (
+            label: (r['label'] ?? '').toString(),
+            value: _toDouble(r['balance']),
+          ),
+        )
+        .where((r) => r.label.isNotEmpty)
+        .toList();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final paintGrid = Paint()
@@ -1183,6 +1261,9 @@ class _TrendChartPainter extends CustomPainter {
     final chartWidth = size.width - left - right;
     final chartHeight = size.height - top - bottom;
 
+    final historicalRows = _mapped(historicalTrend);
+    final forecastRows = _mapped(forecastTrend);
+
     for (var i = 0; i < 5; i++) {
       final y = top + (chartHeight / 4) * i;
       canvas.drawLine(
@@ -1192,22 +1273,54 @@ class _TrendChartPainter extends CustomPainter {
       );
     }
 
+    final fallbackHistorical = [
+      (label: 'H1', value: 34000.0),
+      (label: 'H2', value: 31000.0),
+      (label: 'H3', value: 27000.0),
+      (label: 'H4', value: 29000.0),
+      (label: 'H5', value: 36000.0),
+      (label: 'H6', value: 50000.0),
+    ];
+
+    final fallbackForecast = [
+      (label: 'W1', value: 50000.0),
+      (label: 'W2', value: 47000.0),
+      (label: 'W3', value: 51000.0),
+      (label: 'W4', value: 60000.0),
+      (label: 'W5', value: 97000.0),
+      (label: 'W6', value: 88000.0),
+    ];
+
+    final sourceHistorical = historicalRows.isNotEmpty
+        ? historicalRows
+        : fallbackHistorical;
+    final sourceForecast = forecastRows.isNotEmpty
+        ? forecastRows
+        : fallbackForecast;
+
+    final allValues = [
+      ...sourceHistorical.map((e) => e.value),
+      ...sourceForecast.map((e) => e.value),
+    ];
+    final minVal = allValues.reduce(math.min);
+    final maxVal = allValues.reduce(math.max);
+    final range = (maxVal - minVal).abs() < 1 ? 1.0 : (maxVal - minVal);
+
+    Offset pointAt(int index, int total, double value) {
+      final safeTotal = total <= 1 ? 1 : total - 1;
+      final x = left + (chartWidth * index / safeTotal);
+      final y = top + chartHeight - ((value - minVal) / range) * chartHeight;
+      return Offset(x, y);
+    }
+
     final historicalPoints = [
-      Offset(left + chartWidth * 0.00, top + chartHeight * 0.34),
-      Offset(left + chartWidth * 0.10, top + chartHeight * 0.31),
-      Offset(left + chartWidth * 0.20, top + chartHeight * 0.27),
-      Offset(left + chartWidth * 0.30, top + chartHeight * 0.29),
-      Offset(left + chartWidth * 0.42, top + chartHeight * 0.36),
-      Offset(left + chartWidth * 0.52, top + chartHeight * 0.50),
+      for (int i = 0; i < sourceHistorical.length; i++)
+        pointAt(i, sourceHistorical.length, sourceHistorical[i].value),
     ];
 
     final forecastPoints = [
-      Offset(left + chartWidth * 0.52, top + chartHeight * 0.50),
-      Offset(left + chartWidth * 0.63, top + chartHeight * 0.47),
-      Offset(left + chartWidth * 0.74, top + chartHeight * 0.51),
-      Offset(left + chartWidth * 0.84, top + chartHeight * 0.60),
-      Offset(left + chartWidth * 0.92, top + chartHeight * 0.97),
-      Offset(left + chartWidth * 1.00, top + chartHeight * 0.88),
+      for (int i = 0; i < sourceForecast.length; i++)
+        pointAt(i, sourceForecast.length, sourceForecast[i].value),
     ];
 
     final historicalPath = Path()
@@ -1258,7 +1371,10 @@ class _TrendChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _TrendChartPainter oldDelegate) {
+    return oldDelegate.historicalTrend != historicalTrend ||
+        oldDelegate.forecastTrend != forecastTrend;
+  }
 }
 
 class _RecommendationRow extends StatelessWidget {
