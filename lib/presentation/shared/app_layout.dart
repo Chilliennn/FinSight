@@ -9,9 +9,17 @@ import '../dashboard/dashboard_page.dart';
 import '../forecast/forecast_page.dart';
 import '../login/login_page.dart';
 import '../risks/risks_page.dart';
+import 'settings_page.dart';
 import '../upload/upload_page.dart';
 
-enum _AppSection { dashboard, upload, forecast, risks, recommendations }
+enum _AppSection {
+  dashboard,
+  upload,
+  forecast,
+  risks,
+  recommendations,
+  settings,
+}
 
 class AppLayout extends StatefulWidget {
   final _AppSection initialSection;
@@ -111,11 +119,9 @@ class _AppLayoutState extends State<AppLayout> {
       case _AppSection.risks:
         return (title: 'Risk Alerts', subtitle: null, showAiStatus: false);
       case _AppSection.recommendations:
-        return (
-          title: 'Recommendations',
-          subtitle: null,
-          showAiStatus: false,
-        );
+        return (title: 'Recommendations', subtitle: null, showAiStatus: false);
+      case _AppSection.settings:
+        return (title: 'Settings', subtitle: null, showAiStatus: false);
     }
   }
 
@@ -132,21 +138,25 @@ class _AppLayoutState extends State<AppLayout> {
           onGoToRisks: () => _setSection(_AppSection.risks),
         );
       case _AppSection.upload:
-        return UploadPage(
-          businessId: businessId,
-          businessName: businessId,
-        );
+        return UploadPage(businessId: businessId, businessName: businessId);
       case _AppSection.forecast:
         return const ForecastContent();
       case _AppSection.risks:
         return RisksPage(
           businessId: businessId,
           api: RisksApi.http(baseUrl: _apiBaseUrl),
-          onGoToRecommendations: () =>
-              _setSection(_AppSection.recommendations),
+          onGoToRecommendations: () => _setSection(_AppSection.recommendations),
         );
       case _AppSection.recommendations:
         return RecommendationPage(businessId: businessId);
+      case _AppSection.settings:
+        return SettingsPage(
+          apiBaseUrl: _apiBaseUrl,
+          businessId: businessId,
+          initialBusiness: null,
+          onBusinessUpdated: (_) {},
+          onConfirmLogout: () {},
+        );
     }
   }
 
@@ -158,10 +168,7 @@ class _AppLayoutState extends State<AppLayout> {
   }) {
     final isSelected = _currentSection == section;
     return ListTile(
-      leading: Icon(
-        icon,
-        color: isSelected ? Colors.white : Colors.white70,
-      ),
+      leading: Icon(icon, color: isSelected ? Colors.white : Colors.white70),
       title: Text(
         label,
         style: TextStyle(
@@ -351,14 +358,17 @@ class _AppLayoutState extends State<AppLayout> {
             ],
           ),
           const SizedBox(width: 24),
-          const CircleAvatar(
-            radius: 25,
-            backgroundColor: Color(0xFF4F46E5),
-            child: Text(
-              'MJ',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
+          GestureDetector(
+            onTap: () => _setSection(_AppSection.settings),
+            child: const CircleAvatar(
+              radius: 25,
+              backgroundColor: Color(0xFF4F46E5),
+              child: Text(
+                'MJ',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ),
