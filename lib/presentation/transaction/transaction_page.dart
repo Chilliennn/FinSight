@@ -1,10 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-
-import 'transaction_model.dart';
-import 'transaction_repository.dart';
-
-enum _TransactionFilter { all, paid, pending, overdue, income, expense }
 
 class TransactionPage extends StatefulWidget {
   final String businessId;
@@ -16,38 +15,107 @@ class TransactionPage extends StatefulWidget {
 }
 
 class _TransactionPageState extends State<TransactionPage> {
-  final TransactionRepository _repo = TransactionRepository();
-  final TextEditingController _searchController = TextEditingController();
+  static const String _baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3000',
+  );
 
-  List<TransactionRecord> _transactions = [];
+  final http.Client _client = http.Client();
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
+
+  List<Map<String, dynamic>> _rows = [];
+  List<Map<String, dynamic>> _allRows = [];
+  Map<String, dynamic> _summary = const {};
+  List<String> _categoryOptions = const ['All'];
+  List<String> _typeOptions = const ['All', 'Inflow', 'Outflow'];
+  List<String> _sourceOptions = const [
+    'All',
+    'Bank Statement',
+    'Invoice',
+    'Receipt',
+  ];
   String _searchQuery = '';
-  _TransactionFilter _filter = _TransactionFilter.all;
+  String _selectedCategory = 'All';
+  String _selectedType = 'All';
+  String _selectedSource = 'All';
+  bool _showFilterPanel = true;
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadTransactions();
+    _loadTransactions(showLoading: true);
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
+    _client.close();
     super.dispose();
   }
 
-  Future<void> _loadTransactions() async {
+  Future<void> _loadTransactions({required bool showLoading}) async {
     if (!mounted) return;
     setState(() {
-      _loading = true;
+      _loading = showLoading;
       _error = null;
     });
+
     try {
-      final transactions = await _repo.fetchTransactions(widget.businessId);
+      final uri = Uri.parse('$_baseUrl/api/transactions/${widget.businessId}')
+          .replace(
+            queryParameters: {
+              if (_searchQuery.trim().isNotEmpty) 'q': _searchQuery.trim(),
+              if (_selectedCategory != 'All') 'category': _selectedCategory,
+              if (_selectedType != 'All') 'type': _selectedType,
+              if (_selectedSource != 'All') 'source': _selectedSource,
+            },
+          );
+
+      final response = await _client
+          .get(
+            uri,
+            headers: const {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode >= 400 || body['success'] != true) {
+        throw Exception(body['error'] ?? 'Server error ${response.statusCode}');
+      }
+
+      final data = (body['data'] as Map<String, dynamic>? ?? const {});
+      final rawRows = (data['rows'] as List<dynamic>? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+
+      final options =
+          (data['filter_options'] as Map<String, dynamic>? ?? const {});
+      final categories =
+          (options['category'] as List<dynamic>? ?? const ['All'])
+              .map((item) => item.toString())
+              .toList();
+      final types = (options['type'] as List<dynamic>? ?? const ['All'])
+          .map((item) => item.toString())
+          .toList();
+      final sources = (options['source'] as List<dynamic>? ?? const ['All'])
+          .map((item) => item.toString())
+          .toList();
+
       if (!mounted) return;
       setState(() {
-        _transactions = transactions;
+        _rows = rawRows;
+        _allRows = rawRows;
+        _summary = (data['summary'] as Map<String, dynamic>? ?? const {});
+        _categoryOptions = categories;
+        _typeOptions = types;
+        _sourceOptions = sources;
         _loading = false;
       });
     } catch (err) {
@@ -58,47 +126,6 @@ class _TransactionPageState extends State<TransactionPage> {
       });
     }
   }
-
-  List<TransactionRecord> get _filteredTransactions {
-    return _transactions.where((transaction) {
-      final query = _searchQuery.trim().toLowerCase();
-      final matchesSearch =
-          query.isEmpty ||
-          [
-            transaction.displayTitle,
-            transaction.secondaryLabel,
-            transaction.category ?? '',
-            transaction.type,
-            transaction.statusLabel,
-            transaction.sourceLabel,
-            transaction.amountLabel,
-            DateFormat('yyyy-MM-dd').format(transaction.txnDate),
-          ].join(' ').toLowerCase().contains(query);
-
-      final matchesFilter = switch (_filter) {
-        _TransactionFilter.all => true,
-        _TransactionFilter.paid => transaction.isPaid,
-        _TransactionFilter.pending =>
-          !transaction.isPaid && !transaction.isOverdue,
-        _TransactionFilter.overdue => transaction.isOverdue,
-        _TransactionFilter.income => transaction.isCredit,
-        _TransactionFilter.expense => !transaction.isCredit,
-      };
-
-      return matchesSearch && matchesFilter;
-    }).toList();
-  }
-
-  double get _totalInflow => _transactions
-      .where((transaction) => transaction.isCredit)
-      .fold(0, (sum, transaction) => sum + transaction.amount.abs());
-
-  double get _totalOutflow => _transactions
-      .where((transaction) => !transaction.isCredit)
-      .fold(0, (sum, transaction) => sum + transaction.amount.abs());
-
-  int get _overdueCount =>
-      _transactions.where((transaction) => transaction.isOverdue).length;
 
   String _formatAmount(double amount, {required bool positive}) {
     final formatter = NumberFormat.currency(
@@ -111,57 +138,80 @@ class _TransactionPageState extends State<TransactionPage> {
   }
 
   String _summaryRange() {
-    if (_transactions.isEmpty) {
+    if (_allRows.isEmpty) {
       return '0 transactions extracted from uploaded documents';
     }
     final dates =
-        _transactions.map((transaction) => transaction.txnDate).toList()
+        _allRows
+            .map((row) => DateTime.tryParse((row['txn_date'] ?? '').toString()))
+            .whereType<DateTime>()
+            .toList()
           ..sort();
+    if (dates.isEmpty) {
+      return '${_allRows.length} transactions extracted from uploaded documents';
+    }
     final first = DateFormat('MMM yyyy').format(dates.first);
     final last = DateFormat('MMM yyyy').format(dates.last);
-    return '${_transactions.length} transactions extracted from uploaded documents ($first - $last)';
+    return '${_allRows.length} transactions extracted from uploaded documents ($first - $last)';
   }
 
-  Future<void> _chooseFilter() async {
-    final selected = await showModalBottomSheet<_TransactionFilter>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final option in _TransactionFilter.values)
-                RadioListTile<_TransactionFilter>(
-                  value: option,
-                  groupValue: _filter,
-                  onChanged: (value) => Navigator.of(context).pop(value),
-                  title: Text(_filterLabel(option)),
-                ),
-            ],
+  Future<void> _applyFilters() async {
+    await _loadTransactions(showLoading: false);
+  }
+
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? const Color(0xFF3B82F6) : const Color(0xFFCBD5E1),
           ),
-        );
-      },
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? const Color(0xFF1D4ED8) : const Color(0xFF64748B),
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
+      ),
     );
-
-    if (selected != null && mounted) {
-      setState(() => _filter = selected);
-    }
   }
 
-  String _filterLabel(_TransactionFilter filter) {
-    return switch (filter) {
-      _TransactionFilter.all => 'All',
-      _TransactionFilter.paid => 'Paid',
-      _TransactionFilter.pending => 'Pending',
-      _TransactionFilter.overdue => 'Overdue',
-      _TransactionFilter.income => 'Income',
-      _TransactionFilter.expense => 'Expense',
-    };
+  Widget _chipGroup({
+    required List<String> options,
+    required String selected,
+    required ValueChanged<String> onSelected,
+  }) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      children: options
+          .map(
+            (option) => _filterChip(
+              label: option,
+              selected: selected == option,
+              onTap: () {
+                if (selected == option) return;
+                setState(() {
+                  onSelected(option);
+                });
+                _applyFilters();
+              },
+            ),
+          )
+          .toList(),
+    );
   }
 
   @override
@@ -190,7 +240,7 @@ class _TransactionPageState extends State<TransactionPage> {
               ),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: _loadTransactions,
+                onPressed: () => _loadTransactions(showLoading: true),
                 child: const Text('Retry'),
               ),
             ],
@@ -199,8 +249,21 @@ class _TransactionPageState extends State<TransactionPage> {
       );
     }
 
-    final filtered = _filteredTransactions;
+    final filtered = _rows;
     final range = _summaryRange();
+    final totalInflow = (NumberFormat.currency(
+      locale: 'en_MY',
+      symbol: 'RM ',
+      decimalDigits: 0,
+    ).format(((_summary['total_inflow'] as num?) ?? 0).abs()));
+    final totalOutflow = (NumberFormat.currency(
+      locale: 'en_MY',
+      symbol: 'RM ',
+      decimalDigits: 0,
+    ).format(((_summary['total_outflow'] as num?) ?? 0).abs()));
+    final netAmount = ((_summary['net_amount'] as num?) ?? 0).toDouble();
+    final overdueInvoices = ((_summary['overdue_invoices'] as num?) ?? 0)
+        .toInt();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
@@ -235,25 +298,30 @@ class _TransactionPageState extends State<TransactionPage> {
                   _SummaryCard(
                     width: cardWidth,
                     label: 'Total Inflow',
-                    value: _formatAmount(_totalInflow, positive: true),
+                    value: '+$totalInflow',
                     valueColor: const Color(0xFF16A34A),
                   ),
                   _SummaryCard(
                     width: cardWidth,
                     label: 'Total Outflow',
-                    value: _formatAmount(_totalOutflow, positive: false),
+                    value: '-$totalOutflow',
                     valueColor: const Color(0xFFEF4444),
                   ),
                   _SummaryCard(
                     width: cardWidth,
-                    label: 'Total Transactions',
-                    value: '${_transactions.length}',
-                    valueColor: const Color(0xFF0F172A),
+                    label: 'Net Amount',
+                    value: _formatAmount(
+                      netAmount.abs(),
+                      positive: netAmount >= 0,
+                    ),
+                    valueColor: netAmount >= 0
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFEF4444),
                   ),
                   _SummaryCard(
                     width: cardWidth,
                     label: 'Overdue Invoices',
-                    value: '$_overdueCount',
+                    value: '$overdueInvoices',
                     valueColor: const Color(0xFFDC2626),
                   ),
                 ],
@@ -281,7 +349,16 @@ class _TransactionPageState extends State<TransactionPage> {
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    onChanged: (value) => setState(() => _searchQuery = value),
+                    onChanged: (value) {
+                      _searchDebounce?.cancel();
+                      setState(() => _searchQuery = value);
+                      _searchDebounce = Timer(
+                        const Duration(milliseconds: 350),
+                        () {
+                          _applyFilters();
+                        },
+                      );
+                    },
                     decoration: InputDecoration(
                       hintText:
                           'Search transactions, vendors, invoice numbers...',
@@ -305,9 +382,13 @@ class _TransactionPageState extends State<TransactionPage> {
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
-                  onPressed: _chooseFilter,
+                  onPressed: () {
+                    setState(() {
+                      _showFilterPanel = !_showFilterPanel;
+                    });
+                  },
                   icon: const Icon(Icons.tune, size: 18),
-                  label: Text(_filterLabel(_filter)),
+                  label: const Text('Filters'),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(120, 48),
                     shape: RoundedRectangleBorder(
@@ -318,6 +399,100 @@ class _TransactionPageState extends State<TransactionPage> {
               ],
             ),
           ),
+          if (_showFilterPanel) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0A0F172A),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'CATEGORY',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _chipGroup(
+                              options: _categoryOptions,
+                              selected: _selectedCategory,
+                              onSelected: (value) => _selectedCategory = value,
+                            ),
+                            const SizedBox(height: 18),
+                            const Text(
+                              'SOURCE',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _chipGroup(
+                              options: _sourceOptions,
+                              selected: _selectedSource,
+                              onSelected: (value) => _selectedSource = value,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'TYPE',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _chipGroup(
+                              options: _typeOptions,
+                              selected: _selectedType,
+                              onSelected: (value) => _selectedType = value,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
@@ -332,7 +507,7 @@ class _TransactionPageState extends State<TransactionPage> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
                   child: Text(
-                    'Showing ${filtered.length} of ${_transactions.length} transactions',
+                    'Showing ${filtered.length} of ${_summary['total_transactions'] ?? filtered.length} transactions',
                     style: const TextStyle(
                       color: Color(0xFF64748B),
                       fontSize: 13,
@@ -464,22 +639,37 @@ class _TableHeaderStyle {
 }
 
 class _TransactionRow extends StatelessWidget {
-  final TransactionRecord transaction;
+  final Map<String, dynamic> transaction;
 
   const _TransactionRow({required this.transaction});
 
-  Color get _amountColor =>
-      transaction.isCredit ? const Color(0xFF16A34A) : const Color(0xFFEF4444);
+  bool get _isInflow => (transaction['type'] ?? 'Inflow') == 'Inflow';
 
-  IconData get _icon => transaction.isCredit
-      ? Icons.trending_up_rounded
-      : Icons.trending_down_rounded;
+  Color get _amountColor =>
+      _isInflow ? const Color(0xFF16A34A) : const Color(0xFFEF4444);
+
+  IconData get _icon =>
+      _isInflow ? Icons.trending_up_rounded : Icons.trending_down_rounded;
 
   Color get _iconColor =>
-      transaction.isCredit ? const Color(0xFF34D399) : const Color(0xFFF87171);
+      _isInflow ? const Color(0xFF34D399) : const Color(0xFFF87171);
+
+  String get _status => (transaction['status'] ?? 'Pending').toString();
+
+  String _amountLabel() {
+    final amount = ((transaction['amount'] as num?) ?? 0).toDouble().abs();
+    final formatter = NumberFormat.currency(
+      locale: 'en_MY',
+      symbol: 'RM ',
+      decimalDigits: amount % 1 == 0 ? 0 : 2,
+    );
+    return _isInflow
+        ? '+${formatter.format(amount)}'
+        : '-${formatter.format(amount)}';
+  }
 
   Color get _chipColor {
-    return switch (transaction.statusLabel) {
+    return switch (_status) {
       'Paid' => const Color(0xFF10B981),
       'Overdue' => const Color(0xFFDC2626),
       _ => const Color(0xFFF59E0B),
@@ -487,7 +677,7 @@ class _TransactionRow extends StatelessWidget {
   }
 
   Color get _chipBgColor {
-    return switch (transaction.statusLabel) {
+    return switch (_status) {
       'Paid' => const Color(0xFFF0FDF4),
       'Overdue' => const Color(0xFFFEE2E2),
       _ => const Color(0xFFFFFBEB),
@@ -506,7 +696,10 @@ class _TransactionRow extends StatelessWidget {
           SizedBox(
             width: 110,
             child: Text(
-              DateFormat('yyyy-MM-dd').format(transaction.txnDate),
+              DateTime.tryParse(
+                    (transaction['txn_date'] ?? '').toString(),
+                  )?.toIso8601String().substring(0, 10) ??
+                  '-',
               style: const TextStyle(color: Color(0xFF334155), fontSize: 13),
             ),
           ),
@@ -516,7 +709,7 @@ class _TransactionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  transaction.displayTitle,
+                  (transaction['description'] ?? 'Transaction').toString(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -527,7 +720,11 @@ class _TransactionRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  transaction.secondaryLabel,
+                  (transaction['document_id'] ??
+                          transaction['category'] ??
+                          transaction['type'] ??
+                          '-')
+                      .toString(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -541,9 +738,7 @@ class _TransactionRow extends StatelessWidget {
           SizedBox(
             width: 180,
             child: Text(
-              transaction.vendorName?.trim().isNotEmpty == true
-                  ? transaction.vendorName!
-                  : '-',
+              (transaction['vendor_name'] ?? '-').toString(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
@@ -558,9 +753,8 @@ class _TransactionRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                transaction.category?.trim().isNotEmpty == true
-                    ? transaction.category!
-                    : transaction.type,
+                (transaction['category'] ?? transaction['type'] ?? '-')
+                    .toString(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -574,7 +768,7 @@ class _TransactionRow extends StatelessWidget {
           SizedBox(
             width: 140,
             child: Text(
-              transaction.amountLabel,
+              _amountLabel(),
               style: TextStyle(
                 color: _amountColor,
                 fontSize: 14,
@@ -591,7 +785,7 @@ class _TransactionRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                transaction.statusLabel,
+                _status,
                 style: TextStyle(
                   color: _chipColor,
                   fontSize: 11,
@@ -616,7 +810,7 @@ class _TransactionRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    transaction.sourceLabel,
+                    (transaction['source'] ?? '-').toString(),
                     style: const TextStyle(
                       color: Color(0xFF64748B),
                       fontSize: 11,
