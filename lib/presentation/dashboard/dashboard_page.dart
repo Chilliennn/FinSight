@@ -5,7 +5,7 @@
 //      All "View all" / "All" buttons now call that callback instead of () {}.
 //   2. _RecommendationsCard gains onViewAll VoidCallback → passed by DashboardContent.
 //   3. _RiskCard gains onViewAll VoidCallback → passed by DashboardContent.
-//   4. DashboardContent gains optional onGoToRecommendations / onGoToRisks callbacks.
+//   4. DashboardContent gains optional onGoToRecommendations / onGoToRisks / onGoToTransactions callbacks.
 //      main.dart (or whoever builds DashboardContent) passes the Navigator calls in.
 //   5. "View Risks" alert banner button calls onGoToRisks.
 //   6. NO new imports needed — no circular dependency risk.
@@ -20,11 +20,13 @@ class DashboardContent extends StatelessWidget {
   // free of circular dependencies.
   final VoidCallback? onGoToRecommendations;
   final VoidCallback? onGoToRisks;
+  final VoidCallback? onGoToTransactions;
 
   const DashboardContent({
     super.key,
     this.onGoToRecommendations,
     this.onGoToRisks,
+    this.onGoToTransactions,
   });
 
   Widget _cardShell({required Widget child}) {
@@ -378,7 +380,10 @@ class DashboardContent extends StatelessWidget {
                   onViewAll: onGoToRisks, // ← wired
                 ),
                 const SizedBox(height: 14),
-                _TransactionsCard(cardShell: _cardShell),
+                _TransactionsCard(
+                  cardShell: _cardShell,
+                  onViewAll: onGoToTransactions,
+                ),
               ] else ...[
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,7 +425,10 @@ class DashboardContent extends StatelessWidget {
                     SizedBox(
                       width: sideCardWidth,
                       height: bottomCardHeight,
-                      child: _TransactionsCard(cardShell: _cardShell),
+                      child: _TransactionsCard(
+                        cardShell: _cardShell,
+                        onViewAll: onGoToTransactions,
+                      ),
                     ),
                   ],
                 ),
@@ -701,7 +709,8 @@ class _RecommendationsCard extends StatelessWidget {
 
 class _TransactionsCard extends StatelessWidget {
   final Widget Function({required Widget child}) cardShell;
-  const _TransactionsCard({required this.cardShell});
+  final VoidCallback? onViewAll;
+  const _TransactionsCard({required this.cardShell, this.onViewAll});
 
   @override
   Widget build(BuildContext context) {
@@ -717,8 +726,7 @@ class _TransactionsCard extends StatelessWidget {
                   'Recent Transactions',
                   '42 total extracted',
                   actionText: 'All',
-                  // Transactions page not built yet — shows SnackBar
-                  onAction: null,
+                  onAction: onViewAll,
                 ),
                 const SizedBox(height: 12),
                 const _TransactionRow(

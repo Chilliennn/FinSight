@@ -9,12 +9,14 @@ import '../dashboard/dashboard_page.dart';
 import '../forecast/forecast_page.dart';
 import '../login/login_page.dart';
 import '../risks/risks_page.dart';
+import '../transaction/transaction_page.dart';
 import 'settings_page.dart';
 import '../upload/upload_page.dart';
 
 enum _AppSection {
   dashboard,
   upload,
+  transactions,
   forecast,
   risks,
   recommendations,
@@ -110,6 +112,12 @@ class _AppLayoutState extends State<AppLayout> {
           subtitle: _businessId,
           showAiStatus: true,
         );
+      case _AppSection.transactions:
+        return (
+          title: 'Transactions',
+          subtitle: _businessId,
+          showAiStatus: true,
+        );
       case _AppSection.forecast:
         return (
           title: 'Cash Flow Forecast',
@@ -136,9 +144,12 @@ class _AppLayoutState extends State<AppLayout> {
         return DashboardContent(
           onGoToRecommendations: () => _setSection(_AppSection.recommendations),
           onGoToRisks: () => _setSection(_AppSection.risks),
+          onGoToTransactions: () => _setSection(_AppSection.transactions),
         );
       case _AppSection.upload:
         return UploadPage(businessId: businessId, businessName: businessId);
+      case _AppSection.transactions:
+        return TransactionPage(businessId: businessId);
       case _AppSection.forecast:
         return const ForecastContent();
       case _AppSection.risks:
@@ -229,6 +240,12 @@ class _AppLayoutState extends State<AppLayout> {
                     icon: Icons.upload_file_outlined,
                     label: 'Upload Documents',
                     section: _AppSection.upload,
+                  ),
+                  _navTile(
+                    context,
+                    icon: Icons.receipt_long_outlined,
+                    label: 'Transactions',
+                    section: _AppSection.transactions,
                   ),
                   _navTile(
                     context,
