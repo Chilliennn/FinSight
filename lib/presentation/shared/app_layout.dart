@@ -42,6 +42,11 @@ class _AppLayoutState extends State<AppLayout> {
   String? _businessId;
   bool _loadingSession = true;
 
+  String _sessionFilePath() {
+    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+    return '$home/.finsight_business_id';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -58,8 +63,7 @@ class _AppLayoutState extends State<AppLayout> {
             ? null
             : businessId;
       } else {
-        final home = Platform.environment['HOME'] ?? '.';
-        final file = File('$home/.finsight_business_id');
+        final file = File(_sessionFilePath());
         if (await file.exists()) {
           final businessId = (await file.readAsString()).trim();
           _businessId = businessId.isEmpty ? null : businessId;
@@ -78,8 +82,7 @@ class _AppLayoutState extends State<AppLayout> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('business_id', businessId);
     } else {
-      final home = Platform.environment['HOME'] ?? '.';
-      final file = File('$home/.finsight_business_id');
+      final file = File(_sessionFilePath());
       await file.writeAsString(businessId);
     }
 
@@ -88,6 +91,52 @@ class _AppLayoutState extends State<AppLayout> {
       _businessId = businessId;
       _currentSection = _AppSection.dashboard;
     });
+  }
+
+  Future<void> _clearBusinessId() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('business_id');
+    } else {
+      final file = File(_sessionFilePath());
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _businessId = null;
+      _currentSection = _AppSection.dashboard;
+    });
+  }
+
+  void _showLogoutConfirmation() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('You will be redirected to the login page.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await _clearBusinessId();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFDC2626),
+              ),
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _setSection(_AppSection section, {bool closeDrawer = false}) {
@@ -150,8 +199,11 @@ class _AppLayoutState extends State<AppLayout> {
         return UploadPage(businessId: businessId, businessName: businessId);
       case _AppSection.transactions:
         return TransactionPage(businessId: businessId);
-      case _AppSection.forecast:
-        return const ForecastContent();
+      case _AppSection.forecast: 
+        return ForecastContent(
+          businessId: businessId,
+          apiBaseUrl: _apiBaseUrl,
+        );
       case _AppSection.risks:
         return RisksPage(
           businessId: businessId,
@@ -196,6 +248,24 @@ class _AppLayoutState extends State<AppLayout> {
           closeDrawer: Scaffold.maybeOf(context)?.isDrawerOpen ?? false,
         );
       },
+    );
+  }
+
+  Widget _actionTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color iconColor = Colors.white70,
+    Color textColor = Colors.white70,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: iconColor),
+      title: Text(
+        label,
+        style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onTap: onTap,
     );
   }
 
@@ -264,6 +334,15 @@ class _AppLayoutState extends State<AppLayout> {
                     icon: Icons.lightbulb_outline,
                     label: 'Recommendations',
                     section: _AppSection.recommendations,
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(color: Colors.white24),
+                  _actionTile(
+                    icon: Icons.logout,
+                    label: 'Logout',
+                    iconColor: const Color(0xFFFCA5A5),
+                    textColor: const Color(0xFFFCA5A5),
+                    onTap: _showLogoutConfirmation,
                   ),
                 ],
               ),
@@ -375,7 +454,7 @@ class _AppLayoutState extends State<AppLayout> {
             ],
           ),
           const SizedBox(width: 24),
-          GestureDetector(
+           GestureDetector(
             onTap: () => _setSection(_AppSection.settings),
             child: const CircleAvatar(
               radius: 25,
@@ -441,3 +520,4 @@ class _AppLayoutState extends State<AppLayout> {
     );
   }
 }
+

@@ -83,7 +83,7 @@ class _UploadPageState extends State<UploadPage> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowMultiple: false,
         withData: true,
