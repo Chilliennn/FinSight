@@ -152,32 +152,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  void _showLogoutConfirmation() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('You will be redirected to the login page.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              widget.onConfirmLogout();
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFFDC2626),
-            ),
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -290,19 +264,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
             ),
-          ),
-        ),
-        Positioned(
-          bottom: 28,
-          right: 28,
-          child: ElevatedButton(
-            onPressed: _showLogoutConfirmation,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFDC2626),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: const Text('Logout'),
           ),
         ),
       ],
