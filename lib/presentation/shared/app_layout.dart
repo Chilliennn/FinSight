@@ -191,6 +191,8 @@ class _AppLayoutState extends State<AppLayout> {
     switch (_currentSection) {
       case _AppSection.dashboard:
         return DashboardContent(
+          businessId: businessId,
+          apiBaseUrl: _apiBaseUrl,
           onGoToRecommendations: () => _setSection(_AppSection.recommendations),
           onGoToRisks: () => _setSection(_AppSection.risks),
           onGoToTransactions: () => _setSection(_AppSection.transactions),
