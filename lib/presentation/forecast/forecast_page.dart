@@ -6,14 +6,21 @@
 // - Detailed 8-week forecast table
 
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 class ForecastContent extends StatefulWidget {
   final VoidCallback? onGoToDashboard;
+  final String businessId;
+  final String apiBaseUrl;
 
   const ForecastContent({
     super.key,
     this.onGoToDashboard,
+    required this.businessId,
+    required this.apiBaseUrl,
   });
 
   @override
@@ -33,21 +40,130 @@ class _ForecastContentState extends State<ForecastContent> {
 
   Future<void> _loadForecastData() async {
     try {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
 
-      // TODO: Replace mock with backend API call.
-      await Future.delayed(const Duration(milliseconds: 450));
+      final uri = Uri.parse(
+        '${widget.apiBaseUrl}/api/forecast/${widget.businessId}',
+      );
+      final response = await http.get(uri, headers: {
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(
+          'Forecast API failed (${response.statusCode}): ${response.body}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Invalid forecast response format');
+      }
+
+      final success = decoded['success'] == true;
+      if (!success) {
+        throw Exception(decoded['error']?.toString() ?? 'Forecast API returned error');
+      }
+
+      final rawData = decoded['data'];
+      if (rawData is! Map<String, dynamic>) {
+        throw Exception('Forecast data payload missing or invalid');
+      }
 
       setState(() {
-        _forecastData = _generateMockForecastData();
+        _forecastData = _normalizeForecastData(rawData);
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = 'Unable to load forecast from backend. ${e.toString()}';
         _isLoading = false;
       });
     }
+  }
+
+  Map<String, dynamic> _normalizeForecastData(Map<String, dynamic> raw) {
+    final weeklyRaw = (raw['weekly_totals'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    final projectionStart = DateTime.tryParse(
+      (raw['projection_start_date'] ?? raw['generated_at'] ?? '').toString(),
+    );
+
+    final weekly = <Map<String, dynamic>>[];
+    for (int i = 0; i < weeklyRaw.length; i++) {
+      final row = weeklyRaw[i];
+      final weekNumber = _toInt(row['week'], fallback: i + 1);
+      final periodDate = projectionStart?.add(Duration(days: (weekNumber - 1) * 7));
+      final period = periodDate != null ? DateFormat('d MMM').format(periodDate) : 'W$weekNumber';
+
+      weekly.add({
+        'week': weekNumber,
+        'period': period,
+        'total_inflow': _toInt(row['total_inflow']),
+        'total_outflow': _toInt(row['total_outflow']),
+        'net_flow': _toInt(row['net_flow']),
+        'end_of_week_balance': _toInt(row['end_of_week_balance']),
+      });
+    }
+
+    final minBal = weekly.isEmpty
+        ? 0
+        : weekly
+            .map((w) => w['end_of_week_balance'] as int)
+            .reduce((a, b) => math.min(a, b));
+
+    final avgIn = weekly.isEmpty
+        ? 0
+        : (weekly.fold<int>(0, (s, w) => s + (w['total_inflow'] as int)) /
+                weekly.length)
+            .round();
+
+    final avgOut = weekly.isEmpty
+        ? 0
+        : (weekly.fold<int>(0, (s, w) => s + (w['total_outflow'] as int)) /
+                weekly.length)
+            .round();
+
+    final risk = Map<String, dynamic>.from((raw['risk_summary'] as Map?) ?? const {});
+    final shortfallDate = (risk['projected_shortfall_date'] ?? '').toString();
+
+    final ai = Map<String, dynamic>.from((raw['ai_insights'] as Map?) ?? const {});
+
+    return {
+      'business_id': raw['business_id'] ?? widget.businessId,
+      'current_balance': _toInt(raw['current_balance']),
+      'generated_at': raw['generated_at'] ?? DateTime.now().toIso8601String(),
+      'weekly_totals': weekly,
+      'risk_summary': {
+        'risk_level': (risk['risk_level'] ?? 'Low').toString(),
+        'minimum_projected_balance': _toInt(risk['minimum_projected_balance'], fallback: minBal),
+        'projected_shortfall_date': shortfallDate,
+      },
+      'kpis': {
+        'avg_weekly_inflow': avgIn,
+        'avg_weekly_outflow': avgOut,
+      },
+      'cash_gap_note': shortfallDate.isNotEmpty
+          ? 'Cash gap projected around $shortfallDate. Review outflows and apply recommendations early.'
+          : 'No shortfall date projected in the current forecast window.',
+      'ai_insights': {
+        'summary': (ai['summary'] ?? 'Forecast loaded from backend.').toString(),
+        'warnings': (ai['warnings'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+        'opportunities': (ai['opportunities'] as List<dynamic>? ?? const []).map((e) => e.toString()).toList(),
+      },
+    };
+  }
+
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
   }
 
   Map<String, dynamic> _generateMockForecastData() {
