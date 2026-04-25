@@ -1,5 +1,7 @@
 # finsight
 
+Pitching video: https://drive.google.com/file/d/1bYiYu-sSif0___swcP9g2QR2JwgwRbue/view?usp=sharing
+
 A new Flutter project.
 
 ## Getting Started
