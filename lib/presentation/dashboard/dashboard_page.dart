@@ -42,8 +42,13 @@ class _DashboardContentState extends State<DashboardContent> {
         _error = null;
       });
 
-      final uri = Uri.parse('${widget.apiBaseUrl}/api/dashboard/${widget.businessId}');
-      final response = await http.get(uri, headers: {'Accept': 'application/json'});
+      final uri = Uri.parse(
+        '${widget.apiBaseUrl}/api/dashboard/${widget.businessId}',
+      );
+      final response = await http.get(
+        uri,
+        headers: {'Accept': 'application/json'},
+      );
       final payload = jsonDecode(response.body);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -51,9 +56,11 @@ class _DashboardContentState extends State<DashboardContent> {
       }
 
       if (payload is! Map<String, dynamic> || payload['success'] != true) {
-        throw Exception((payload is Map<String, dynamic>)
-            ? (payload['error']?.toString() ?? 'Dashboard API returned error')
-            : 'Invalid dashboard response');
+        throw Exception(
+          (payload is Map<String, dynamic>)
+              ? (payload['error']?.toString() ?? 'Dashboard API returned error')
+              : 'Invalid dashboard response',
+        );
       }
 
       final data = payload['data'];
@@ -82,14 +89,21 @@ class _DashboardContentState extends State<DashboardContent> {
   }
 
   String _rm(int value) {
-    final abs = value.abs().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+    final abs = value.abs().toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (m) => ',',
+    );
     final sign = value < 0 ? '-' : '';
-    return '$sign' 'RM $abs';
+    return '$sign'
+        'RM $abs';
   }
 
   String _deltaLabel(int delta) {
     final direction = delta >= 0 ? 'UP' : 'DOWN';
-    final abs = delta.abs().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',');
+    final abs = delta.abs().toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'),
+      (m) => ',',
+    );
     return '$direction RM $abs';
   }
 
@@ -103,15 +117,28 @@ class _DashboardContentState extends State<DashboardContent> {
 
   List<Map<String, dynamic>> _rows(dynamic value) {
     if (value is! List) return const [];
-    return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    return value
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   String _friendlyDate(String isoDate) {
     final parsed = DateTime.tryParse(isoDate);
     if (parsed == null) return isoDate;
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
   }
@@ -138,7 +165,7 @@ class _DashboardContentState extends State<DashboardContent> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
+        color: color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -185,7 +212,7 @@ class _DashboardContentState extends State<DashboardContent> {
                   width: 36,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: iconColor.withValues(alpha: 0.10),
+                    color: iconColor.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: iconColor, size: 20),
@@ -234,7 +261,7 @@ class _DashboardContentState extends State<DashboardContent> {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: accent.withValues(alpha: 0.32)),
+        border: Border.all(color: accent.withOpacity(0.32)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,7 +284,7 @@ class _DashboardContentState extends State<DashboardContent> {
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
-                    color: accent.withValues(alpha: 0.95),
+                    color: accent.withOpacity(0.95),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -276,6 +303,42 @@ class _DashboardContentState extends State<DashboardContent> {
     );
   }
 
+  String _formatRm(num value) {
+    final rounded = value.round();
+    final isNegative = rounded < 0;
+    final digits = rounded.abs().toString();
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(digits[index]);
+    }
+
+    return '${isNegative ? '-' : ''}RM ${buffer.toString()}';
+  }
+
+  String _formatSignedRm(num value) {
+    final rounded = value.round();
+    final prefix = rounded >= 0 ? '+' : '-';
+    final digits = rounded.abs().toString();
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(digits[index]);
+    }
+
+    return '${prefix}RM ${buffer.toString()}';
+  }
+
+  Color _changeColor(num value) {
+    return value >= 0 ? const Color(0xFF059669) : const Color(0xFFEF4444);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -289,7 +352,11 @@ class _DashboardContentState extends State<DashboardContent> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: Color(0xFFDC2626), size: 36),
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFDC2626),
+                size: 36,
+              ),
               const SizedBox(height: 10),
               Text(
                 'Unable to load dashboard\n$_error',
@@ -297,7 +364,10 @@ class _DashboardContentState extends State<DashboardContent> {
                 style: const TextStyle(color: Color(0xFF991B1B)),
               ),
               const SizedBox(height: 14),
-              ElevatedButton(onPressed: _loadDashboard, child: const Text('Retry')),
+              ElevatedButton(
+                onPressed: _loadDashboard,
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
@@ -305,11 +375,21 @@ class _DashboardContentState extends State<DashboardContent> {
     }
 
     final kpis = Map<String, dynamic>.from((_data['kpis'] as Map?) ?? const {});
-    final alert = Map<String, dynamic>.from((_data['alert'] as Map?) ?? const {});
-    final riskSummary = Map<String, dynamic>.from((_data['risk_summary'] as Map?) ?? const {});
-    final recommendations = Map<String, dynamic>.from((_data['recommendations'] as Map?) ?? const {});
-    final recentTransactions = Map<String, dynamic>.from((_data['recent_transactions'] as Map?) ?? const {});
-    final trend = Map<String, dynamic>.from((_data['trend'] as Map?) ?? const {});
+    final alert = Map<String, dynamic>.from(
+      (_data['alert'] as Map?) ?? const {},
+    );
+    final riskSummary = Map<String, dynamic>.from(
+      (_data['risk_summary'] as Map?) ?? const {},
+    );
+    final recommendations = Map<String, dynamic>.from(
+      (_data['recommendations'] as Map?) ?? const {},
+    );
+    final recentTransactions = Map<String, dynamic>.from(
+      (_data['recent_transactions'] as Map?) ?? const {},
+    );
+    final trend = Map<String, dynamic>.from(
+      (_data['trend'] as Map?) ?? const {},
+    );
 
     final riskRows = _rows(riskSummary['rows']);
     final recommendationRows = _rows(recommendations['rows']);
@@ -354,7 +434,10 @@ class _DashboardContentState extends State<DashboardContent> {
             icon: Icons.credit_card_rounded,
             iconColor: const Color(0xFFF59E0B),
             change: _deltaLabel(monthlyExpensesDelta),
-            changeColor: _deltaColor(monthlyExpensesDelta, negativeIsGood: true),
+            changeColor: _deltaColor(
+              monthlyExpensesDelta,
+              negativeIsGood: true,
+            ),
             value: _rm(monthlyExpenses),
             title: 'Monthly Expenses',
             subtitle: 'current month',
@@ -373,7 +456,7 @@ class _DashboardContentState extends State<DashboardContent> {
         final metricGrid = isCompact
             ? Column(
                 children: [
-                  for (int i = 0; i < metricCards.length; i++) ...[
+                  for (var i = 0; i < metricCards.length; i++) ...[
                     metricCards[i],
                     if (i != metricCards.length - 1) const SizedBox(height: 12),
                   ],
@@ -381,7 +464,7 @@ class _DashboardContentState extends State<DashboardContent> {
               )
             : Row(
                 children: [
-                  for (int i = 0; i < metricCards.length; i++) ...[
+                  for (var i = 0; i < metricCards.length; i++) ...[
                     Expanded(child: metricCards[i]),
                     if (i != metricCards.length - 1) const SizedBox(width: 12),
                   ],
@@ -393,7 +476,12 @@ class _DashboardContentState extends State<DashboardContent> {
         const bottomCardHeight = 420.0;
 
         return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 18, horizontalPadding, 24),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            18,
+            horizontalPadding,
+            24,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -413,7 +501,10 @@ class _DashboardContentState extends State<DashboardContent> {
                     const SizedBox(height: 4),
                     Text(
                       _friendlyDate((_data['as_of_date'] ?? '').toString()),
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -452,7 +543,8 @@ class _DashboardContentState extends State<DashboardContent> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              (alert['title'] ?? 'Latest cash flow status').toString(),
+                              (alert['title'] ?? 'Latest cash flow status')
+                                  .toString(),
                               style: const TextStyle(
                                 fontWeight: FontWeight.w800,
                                 color: Color(0xFFB91C1C),
@@ -460,7 +552,9 @@ class _DashboardContentState extends State<DashboardContent> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              (alert['subtitle'] ?? 'No forecast alert currently available.').toString(),
+                              (alert['subtitle'] ??
+                                      'No forecast alert currently available.')
+                                  .toString(),
                               style: const TextStyle(
                                 color: Color(0xFFEF4444),
                                 fontSize: 12,
@@ -475,7 +569,10 @@ class _DashboardContentState extends State<DashboardContent> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFEF4444),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -656,11 +753,17 @@ class _TrendCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 18),
+                  const Icon(
+                    Icons.error_outline,
+                    color: Color(0xFFEF4444),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      alertText.isEmpty ? 'No shortfall projected in the active window.' : alertText,
+                      alertText.isEmpty
+                          ? 'No shortfall projected in the active window.'
+                          : alertText,
                       style: const TextStyle(
                         color: Color(0xFFEF4444),
                         fontWeight: FontWeight.w700,
@@ -703,12 +806,21 @@ class _RiskCard extends StatelessWidget {
     switch (severity.toLowerCase()) {
       case 'critical':
       case 'high':
-        return (accent: const Color(0xFFEF4444), background: const Color(0xFFFFF1F2));
+        return (
+          accent: const Color(0xFFEF4444),
+          background: const Color(0xFFFFF1F2),
+        );
       case 'low':
-        return (accent: const Color(0xFF10B981), background: const Color(0xFFECFDF5));
+        return (
+          accent: const Color(0xFF10B981),
+          background: const Color(0xFFECFDF5),
+        );
       case 'medium':
       default:
-        return (accent: const Color(0xFFF59E0B), background: const Color(0xFFFFFBEB));
+        return (
+          accent: const Color(0xFFF59E0B),
+          background: const Color(0xFFFFFBEB),
+        );
     }
   }
 
@@ -728,7 +840,9 @@ class _RiskCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ...rows.take(4).map((row) {
-              final colors = _severityColors((row['severity'] ?? 'medium').toString());
+              final colors = _severityColors(
+                (row['severity'] ?? 'medium').toString(),
+              );
               return Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: riskTile(
@@ -774,6 +888,34 @@ class _RiskCard extends StatelessWidget {
       ),
     );
   }
+
+  Color _severityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return const Color(0xFFEF4444);
+      case 'high':
+        return const Color(0xFFF59E0B);
+      case 'medium':
+        return const Color(0xFFEAB308);
+      case 'low':
+      default:
+        return const Color(0xFF64748B);
+    }
+  }
+
+  Color _severityBackground(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+        return const Color(0xFFFFF1F2);
+      case 'high':
+        return const Color(0xFFFFFBEB);
+      case 'medium':
+        return const Color(0xFFFEFCE8);
+      case 'low':
+      default:
+        return const Color(0xFFF8FAFC);
+    }
+  }
 }
 
 class _RecommendationsCard extends StatelessWidget {
@@ -807,16 +949,22 @@ class _RecommendationsCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 ...rows.take(3).map((row) {
-                  final amountValue = int.tryParse((row['amount_value'] ?? '0').toString()) ?? 0;
+                  final amountValue =
+                      int.tryParse((row['amount_value'] ?? '0').toString()) ??
+                      0;
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _RecommendationRow(
-                      index: int.tryParse((row['index'] ?? '1').toString()) ?? 1,
+                      index:
+                          int.tryParse((row['index'] ?? '1').toString()) ?? 1,
                       title: (row['title'] ?? 'Recommendation').toString(),
-                      subtitle: (row['subtitle'] ?? 'Action recommended').toString(),
+                      subtitle: (row['subtitle'] ?? 'Action recommended')
+                          .toString(),
                       amount: (row['amount'] ?? '+RM 0').toString(),
                       amountHint: (row['amount_hint'] ?? 'impact').toString(),
-                      amountColor: amountValue >= 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+                      amountColor: amountValue >= 0
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444),
                       accent: const Color(0xFF2563EB),
                     ),
                   );
@@ -880,6 +1028,35 @@ class _RecommendationsCard extends StatelessWidget {
       ),
     );
   }
+
+  Color _amountColor(String amountHint) {
+    switch (amountHint.toLowerCase()) {
+      case 'cash in':
+        return const Color(0xFF16A34A);
+      case 'buffer':
+        return const Color(0xFFF97316);
+      case 'save':
+        return const Color(0xFF2563EB);
+      default:
+        return const Color(0xFF94A3B8);
+    }
+  }
+
+  String _formatSignedRm(num value) {
+    final rounded = value.round();
+    final prefix = rounded >= 0 ? '+' : '-';
+    final digits = rounded.abs().toString();
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < digits.length; index++) {
+      if (index > 0 && (digits.length - index) % 3 == 0) {
+        buffer.write(',');
+      }
+      buffer.write(digits[index]);
+    }
+
+    return '${prefix}RM ${buffer.toString()}';
+  }
 }
 
 class _TransactionsCard extends StatelessWidget {
@@ -913,15 +1090,24 @@ class _TransactionsCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 ...rows.take(6).map((row) {
-                  final direction = (row['direction'] ?? '').toString().toLowerCase();
+                  final direction = (row['direction'] ?? '')
+                      .toString()
+                      .toLowerCase();
                   final isInflow = direction == 'inflow';
                   return _TransactionRow(
                     title: (row['title'] ?? 'Transaction').toString(),
                     date: (row['date'] ?? '').toString(),
-                    amount: (row['amount'] ?? (isInflow ? '+RM 0' : '-RM 0')).toString(),
-                    amountColor: isInflow ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
-                    icon: isInflow ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-                    iconColor: isInflow ? const Color(0xFF34D399) : const Color(0xFFF87171),
+                    amount: (row['amount'] ?? (isInflow ? '+RM 0' : '-RM 0'))
+                        .toString(),
+                    amountColor: isInflow
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFFEF4444),
+                    icon: isInflow
+                        ? Icons.trending_up_rounded
+                        : Icons.trending_down_rounded,
+                    iconColor: isInflow
+                        ? const Color(0xFF34D399)
+                        : const Color(0xFFF87171),
                   );
                 }),
                 if (rows.isEmpty)
@@ -955,6 +1141,7 @@ class _TransactionsCard extends StatelessWidget {
 class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
+
   const _LegendDot({required this.color, required this.label});
 
   @override
@@ -1018,10 +1205,12 @@ class _TrendChartPainter extends CustomPainter {
     List<Map<String, dynamic>> rows,
   ) {
     return rows
-        .map((r) => (
-              label: (r['label'] ?? '').toString(),
-              value: _toDouble(r['balance']),
-            ))
+        .map(
+          (r) => (
+            label: (r['label'] ?? '').toString(),
+            value: _toDouble(r['balance']),
+          ),
+        )
         .where((r) => r.label.isNotEmpty)
         .toList();
   }
@@ -1080,10 +1269,17 @@ class _TrendChartPainter extends CustomPainter {
       (label: 'W6', value: 88000.0),
     ];
 
-    final sourceHistorical = historicalRows.isNotEmpty ? historicalRows : fallbackHistorical;
-    final sourceForecast = forecastRows.isNotEmpty ? forecastRows : fallbackForecast;
+    final sourceHistorical = historicalRows.isNotEmpty
+        ? historicalRows
+        : fallbackHistorical;
+    final sourceForecast = forecastRows.isNotEmpty
+        ? forecastRows
+        : fallbackForecast;
 
-    final allValues = [...sourceHistorical.map((e) => e.value), ...sourceForecast.map((e) => e.value)];
+    final allValues = [
+      ...sourceHistorical.map((e) => e.value),
+      ...sourceForecast.map((e) => e.value),
+    ];
     final minVal = allValues.reduce(math.min);
     final maxVal = allValues.reduce(math.max);
     final range = (maxVal - minVal).abs() < 1 ? 1.0 : (maxVal - minVal);
@@ -1105,7 +1301,8 @@ class _TrendChartPainter extends CustomPainter {
         pointAt(i, sourceForecast.length, sourceForecast[i].value),
     ];
 
-    final historicalPath = Path()..moveTo(historicalPoints.first.dx, historicalPoints.first.dy);
+    final historicalPath = Path()
+      ..moveTo(historicalPoints.first.dx, historicalPoints.first.dy);
     for (final point in historicalPoints.skip(1)) {
       historicalPath.lineTo(point.dx, point.dy);
     }
@@ -1135,14 +1332,16 @@ class _TrendChartPainter extends CustomPainter {
     final dy = end.dy - start.dy;
     final distance = math.sqrt(dx * dx + dy * dy);
     if (distance == 0) return;
+
     final ux = dx / distance;
     final uy = dy / distance;
     var traveled = 0.0;
+
     while (traveled < distance) {
-      final de = math.min(traveled + dashLength, distance);
+      final dashEnd = math.min(traveled + dashLength, distance);
       canvas.drawLine(
         Offset(start.dx + ux * traveled, start.dy + uy * traveled),
-        Offset(start.dx + ux * de, start.dy + uy * de),
+        Offset(start.dx + ux * dashEnd, start.dy + uy * dashEnd),
         paint,
       );
       traveled += dashLength + gapLength;
@@ -1278,7 +1477,7 @@ class _TransactionRow extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.14),
+              color: iconColor.withOpacity(0.14),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, size: 16, color: iconColor),
@@ -1363,4 +1562,233 @@ Widget _sectionRow(
         ),
     ],
   );
+}
+
+Color _severityColor(String severity) {
+  switch (severity.toLowerCase()) {
+    case 'critical':
+      return const Color(0xFFEF4444);
+    case 'high':
+      return const Color(0xFFF59E0B);
+    case 'medium':
+      return const Color(0xFFEAB308);
+    case 'low':
+    default:
+      return const Color(0xFF64748B);
+  }
+}
+
+Color _severityBackground(String severity) {
+  switch (severity.toLowerCase()) {
+    case 'critical':
+      return const Color(0xFFFFF1F2);
+    case 'high':
+      return const Color(0xFFFFFBEB);
+    case 'medium':
+      return const Color(0xFFFEFCE8);
+    case 'low':
+    default:
+      return const Color(0xFFF8FAFC);
+  }
+}
+
+class DashboardData {
+  final String businessName;
+  final String currency;
+  final String asOfDate;
+  final DashboardKpis kpis;
+  final DashboardAlert? alert;
+  final List<DashboardRiskRow> risks;
+  final List<DashboardRecommendationRow> recommendations;
+  final List<DashboardTransactionRow> recentTransactions;
+
+  const DashboardData({
+    required this.businessName,
+    required this.currency,
+    required this.asOfDate,
+    required this.kpis,
+    required this.alert,
+    required this.risks,
+    required this.recommendations,
+    required this.recentTransactions,
+  });
+
+  factory DashboardData.fromJson(Map<String, dynamic> json) {
+    final business = (json['business'] as Map<String, dynamic>?) ?? const {};
+    final kpis = (json['kpis'] as Map<String, dynamic>?) ?? const {};
+    final alert = json['alert'] as Map<String, dynamic>?;
+    final riskSummary =
+        (json['risk_summary'] as Map<String, dynamic>?) ?? const {};
+    final recommendationSummary =
+        (json['recommendations'] as Map<String, dynamic>?) ?? const {};
+    final transactionSummary =
+        (json['recent_transactions'] as Map<String, dynamic>?) ?? const {};
+
+    return DashboardData(
+      businessName: business['name']?.toString() ?? 'Business',
+      currency: business['currency']?.toString() ?? 'MYR',
+      asOfDate: json['as_of_date']?.toString() ?? '',
+      kpis: DashboardKpis.fromJson(kpis),
+      alert: alert == null ? null : DashboardAlert.fromJson(alert),
+      risks: _parseRiskRows(riskSummary['rows']),
+      recommendations: _parseRecommendationRows(recommendationSummary['rows']),
+      recentTransactions: _parseTransactionRows(transactionSummary['rows']),
+    );
+  }
+}
+
+class DashboardAlert {
+  final String title;
+  final String subtitle;
+
+  const DashboardAlert({required this.title, required this.subtitle});
+
+  factory DashboardAlert.fromJson(Map<String, dynamic> json) {
+    return DashboardAlert(
+      title: json['title']?.toString() ?? '',
+      subtitle: json['subtitle']?.toString() ?? '',
+    );
+  }
+}
+
+class DashboardKpis {
+  final int currentBalance;
+  final int currentBalanceDelta;
+  final int monthlyRevenue;
+  final int monthlyRevenueDelta;
+  final int monthlyExpenses;
+  final int monthlyExpensesDelta;
+  final int outstandingInvoices;
+  final int outstandingInvoicesCount;
+
+  const DashboardKpis({
+    required this.currentBalance,
+    required this.currentBalanceDelta,
+    required this.monthlyRevenue,
+    required this.monthlyRevenueDelta,
+    required this.monthlyExpenses,
+    required this.monthlyExpensesDelta,
+    required this.outstandingInvoices,
+    required this.outstandingInvoicesCount,
+  });
+
+  factory DashboardKpis.fromJson(Map<String, dynamic> json) {
+    int readInt(String key) => (json[key] as num? ?? 0).round();
+
+    return DashboardKpis(
+      currentBalance: readInt('current_balance'),
+      currentBalanceDelta: readInt('current_balance_delta'),
+      monthlyRevenue: readInt('monthly_revenue'),
+      monthlyRevenueDelta: readInt('monthly_revenue_delta'),
+      monthlyExpenses: readInt('monthly_expenses'),
+      monthlyExpensesDelta: readInt('monthly_expenses_delta'),
+      outstandingInvoices: readInt('outstanding_invoices'),
+      outstandingInvoicesCount: readInt('outstanding_invoices_count'),
+    );
+  }
+}
+
+class DashboardRiskRow {
+  final String title;
+  final String subtitle;
+  final String severity;
+  final num affectedAmount;
+
+  const DashboardRiskRow({
+    required this.title,
+    required this.subtitle,
+    required this.severity,
+    required this.affectedAmount,
+  });
+
+  factory DashboardRiskRow.fromJson(Map<String, dynamic> json) {
+    return DashboardRiskRow(
+      title: json['title']?.toString() ?? '',
+      subtitle: json['subtitle']?.toString() ?? '',
+      severity: json['severity']?.toString() ?? 'medium',
+      affectedAmount: json['affected_amount'] as num? ?? 0,
+    );
+  }
+}
+
+class DashboardRecommendationRow {
+  final int index;
+  final String title;
+  final String subtitle;
+  final String amount;
+  final num amountValue;
+  final String amountHint;
+
+  const DashboardRecommendationRow({
+    required this.index,
+    required this.title,
+    required this.subtitle,
+    required this.amount,
+    required this.amountValue,
+    required this.amountHint,
+  });
+
+  factory DashboardRecommendationRow.fromJson(Map<String, dynamic> json) {
+    return DashboardRecommendationRow(
+      index: (json['index'] as num? ?? 0).round(),
+      title: json['title']?.toString() ?? '',
+      subtitle: json['subtitle']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '',
+      amountValue: json['amount_value'] as num? ?? 0,
+      amountHint: json['amount_hint']?.toString() ?? 'impact',
+    );
+  }
+}
+
+class DashboardTransactionRow {
+  final String title;
+  final String date;
+  final String amount;
+  final num amountValue;
+
+  const DashboardTransactionRow({
+    required this.title,
+    required this.date,
+    required this.amount,
+    required this.amountValue,
+  });
+
+  factory DashboardTransactionRow.fromJson(Map<String, dynamic> json) {
+    return DashboardTransactionRow(
+      title: json['title']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '',
+      amountValue: json['amount_value'] as num? ?? 0,
+    );
+  }
+}
+
+List<DashboardRiskRow> _parseRiskRows(dynamic rows) {
+  final list = rows as List<dynamic>? ?? const [];
+  return list
+      .whereType<Map>()
+      .map((row) => DashboardRiskRow.fromJson(Map<String, dynamic>.from(row)))
+      .toList();
+}
+
+List<DashboardRecommendationRow> _parseRecommendationRows(dynamic rows) {
+  final list = rows as List<dynamic>? ?? const [];
+  return list
+      .whereType<Map>()
+      .map(
+        (row) =>
+            DashboardRecommendationRow.fromJson(Map<String, dynamic>.from(row)),
+      )
+      .toList();
+}
+
+List<DashboardTransactionRow> _parseTransactionRows(dynamic rows) {
+  final list = rows as List<dynamic>? ?? const [];
+  return list
+      .whereType<Map>()
+      .map(
+        (row) =>
+            DashboardTransactionRow.fromJson(Map<String, dynamic>.from(row)),
+      )
+      .toList();
 }
